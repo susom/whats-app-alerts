@@ -1,0 +1,64 @@
+{
+	"name": "ClassNameHere",
+
+	"namespace": "Stanford\\ClassNameHere",
+
+	"description": "A template for a REDCap External Module",
+
+	"documentation": "README.md",
+
+	"authors": [
+		{
+			"name": "Andrew Martin",
+			"email": "andy123@stanford.edu",
+			"institution": "Stanford University"
+		}
+	],
+
+	"permissions": [
+		"redcap_module_system_enable",
+		"redcap_module_project_enable",
+		"redcap_module_save_configuration"
+	],
+	
+	"enable-every-page-hooks-on-system-pages": false,	
+
+	"links": {
+		"project": [
+
+		],
+		"control-center": [
+
+		]
+	},
+
+	"no-auth-pages": [
+
+	],
+
+	"project-settings": [
+		{
+			"key": "enable-project-debug-logging",
+			"name": "<b>Enable Debug Logging</b><br><i>(optional)</i> Requires installation and configuration of emLogger",
+			"required": false,
+			"type": "checkbox"
+		}
+	],
+
+
+	"system-settings": [
+		{
+			"key": "enable-system-debug-logging",
+			"name": "<b>Enable Debug Logging (system-wide)</b><i>(optional)</i> Requires installation and configuration of emLogger",
+			"required": false,
+			"type": "checkbox"
+		}
+	],
+
+	"compatibility": {
+		"php-version-min": "",
+		"php-version-max": "",
+		"redcap-version-min": "",
+		"redcap-version-max": ""
+	}
+}

@@ -1,0 +1,20 @@
+# IDE project files for IntelliJ - it tends to generate lots of files depending
+# on your exact version, which plugins are installed, etc., so ignore everything
+# except for a vetted list of things we want. In particular, we want code
+# formatting style (which needs to match the checkstyle Maven configuration).
+/.idea/*
+
+# Don't want any encryption keys in version control
+*.jks
+*.jceks
+*.pkcs12
+*.pk12
+*.pem
+*.pfx
+
+# Operating system garbage
+.DS_Store
+[Tt]humbs.db
+
+# Emacs backup files
+*~
