@@ -1,6 +1,7 @@
 <?php
-namespace Stanford\ClassNameHere;
-/** @var ClassNameHere $this */
+namespace Stanford\WhatsAppAlerts;
+
+/** @var WhatsAppAlerts $this */
 
 trait emLoggerTrait
 {

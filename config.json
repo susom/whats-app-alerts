@@ -1,27 +1,33 @@
 {
-	"name": "ClassNameHere",
+	"name": "WhatsAppAlerts",
 
-	"namespace": "Stanford\\ClassNameHere",
+	"namespace": "Stanford\\WhatsAppAlerts",
 
-	"description": "A template for a REDCap External Module",
+	"description": "Convert Alerts and Notifications to use What's App",
 
 	"documentation": "README.md",
+
+    "framework-version": 5,
 
 	"authors": [
 		{
 			"name": "Andrew Martin",
 			"email": "andy123@stanford.edu",
 			"institution": "Stanford University"
-		}
-	],
+		},
+        {
+            "name": "Ryan Valentine",
+            "email": "rval@stanford.edu",
+            "institution": "Stanford University"
+        }
+
+    ],
 
 	"permissions": [
-		"redcap_module_system_enable",
-		"redcap_module_project_enable",
-		"redcap_module_save_configuration"
+		"redcap_email"
 	],
-	
-	"enable-every-page-hooks-on-system-pages": false,	
+
+	"enable-every-page-hooks-on-system-pages": false,
 
 	"links": {
 		"project": [
@@ -33,11 +39,29 @@
 	},
 
 	"no-auth-pages": [
-
+        "statusCallback"
 	],
 
 	"project-settings": [
-		{
+        {
+            "key": "sid",
+            "name": "<b>Twilio SID</b>",
+            "required": true,
+            "type": "text"
+        },
+        {
+            "key": "token",
+            "name": "<b>Twilio Token</b>",
+            "required": true,
+            "type": "text"
+        },
+        {
+            "key": "from-number",
+            "name": "<b>From Number</b><br>Must be in e164 format (e.g. +16508675309 or +255121234567)",
+            "required": true,
+            "type": "text"
+        },
+        {
 			"key": "enable-project-debug-logging",
 			"name": "<b>Enable Debug Logging</b><br><i>(optional)</i> Requires installation and configuration of emLogger",
 			"required": false,
