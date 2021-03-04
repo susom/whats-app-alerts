@@ -31,6 +31,12 @@
 
 	"links": {
 		"project": [
+            {
+                "name": "View What's App Logs",
+                "icon": "fas fa-question-circle",
+                "url": "logs.php",
+                "show-header-and-footer": true
+            }
 
 		],
 		"control-center": [

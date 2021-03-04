@@ -17,15 +17,12 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
 		// Other code to run when object is instantiated
 	}
 
-	public function redcap_email( $to, $from, $subject, $message, $cc, $bcc, $fromName, $attachments ) {
-
-        # Check Subject for '@WHATSAPP' action tag
-        # Function takes (record_id, event_name = '', instance_id = 1, log_field, log_event)
-        preg_match('/@WHATSAPP\((.*)\)/', $subject, $matches);
-
-        # Abort this hook and send the normal email if there is no match for WHATS APP
-        if (empty($matches[1])) return true;
-
+    /**
+     * Because the redcap_email hook doesn't have any context (e.g. record, project, etc) it can sometimes be hard
+     * to know if any context applies.  Generally you can provide details via piping in the subject, but only to a
+     * certain extent.  For example, a scheduled ASI email will have a record, but no event / project context
+     */
+	public function getContext() {
         /*
             [file] => /var/www/html/redcap_v10.8.2/DataEntry/index.php
             [line] => 345
@@ -63,155 +60,172 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
 
         # Get Context
         $bt = debug_backtrace(0);
-        $this->emDebug($bt);
+        // $this->emDebug($bt);
+
         $context = [];
         foreach ($bt as $t) {
-            if (isset($t['function']) && isset($t['class'])) {
-                // If email is being sent from an Alert - get context from debug_backtrace using function:
-                // sendNotification($alert_id, $project_id, $record, $event_id, $instrument, $instance=1, $data=array())
-                if ($t['function'] == 'sendNotification' && $t['class'] == 'Alerts') {
-                    $context['trigger']    = "Alert";
-                    $context['trigger_id'] = $t['args'][0];
-                    $context['record_id']  = $t['args'][2];
-                    $context['event_id']   = $t['args'][3];
-                    $context['instrument'] = $t['args'][4];
-                    $context['instance']   = $t['args'][5];
-                    break;
-                }
+            $function = $t['function'] ?? FALSE;
+            $class = $t['class'] ?? FALSE;
+            $args = preg_replace(['/\'/', '/"/', '/\s+/', '/_{6}/'], ['','','',''], $t['args']);
 
-                if ($t['function'] == 'scheduleParticipantInvitation' && $t['class'] == 'SurveyScheduler') {
-                    // scheduleParticipantInvitation($survey_id, $event_id, $record)
-                    $context['trigger']    = "ASI (Immediate)";
-                    $context['trigger_id'] = $t['args'][0];
-                    $context['record_id']  = $t['args'][2];
-                    $context['event_id']   = $t['args'][1];
-                    break;
-                }
-
-                if ($t['function'] == 'SurveyInvitationEmailer' && $t['class'] == 'Jobs') {
-                    // scheduleParticipantInvitation($survey_id, $event_id, $record)
-                    $context['trigger']    = "ASI (Delayed)";
-                    break;
-                }
-
+            // If email is being sent from an Alert - get context from debug_backtrace using function:
+            // sendNotification($alert_id, $project_id, $record, $event_id, $instrument, $instance=1, $data=array())
+            if ($function == 'sendNotification' && $class == 'Alerts') {
+                $context['trigger']    = "Alert";
+                $context['trigger_id'] = $args[0];
+                $context['project_id'] = $args[1];
+                $context['record_id']  = $args[2];
+                $context['event_id']   = $args[3];
+                $context['instance']   = $args[5];
+                break;
             }
+
+            if ($function == 'scheduleParticipantInvitation' && $class == 'SurveyScheduler') {
+                // scheduleParticipantInvitation($survey_id, $event_id, $record)
+                $context['trigger']    = "ASI (Immediate)";
+                $context['trigger_id'] = $args[0];
+                $context['event_id']   = $args[1];
+                $context['record_id']  = $args[2];
+                break;
+            }
+
+            if ($function == 'SurveyInvitationEmailer' && $class == 'Jobs') {
+                $context['trigger']    = "ASI (Delayed)";
+                $context['trigger_id'] = "";
+                // Unable to get project_id in this case
+                break;
+            }
+
         }
 
+        // Set event_name from event_id
+        if (isset($context['event_id']) && !isset($context['event_name'])) {
+            $context['event_name'] = REDCap::getEventNames(true, false, $context['event_id']);
+        }
+        if (isset($context['event_name']) && !isset($context['event_id'])) {
+            $context['event_id'] = REDCap::getEventIdFromUniqueEvent($context['event_name']);
+        }
+        return $context;
+    }
+
+
+
+	public function redcap_email( $to, $from, $subject, $message, $cc, $bcc, $fromName, $attachments ) {
+
+        # Check Subject for '@WHATSAPP' action tag
+        # Function takes (phone_number, project_id (context), record_id = context if available, event_name = '', instance_id = 1, log_field, log_event_name = context if available)
+        preg_match('/@WHATSAPP\((.*)\)/', $subject, $matches);
+
+        # Abort this hook and send the normal email if there is no match for WHATS APP
+        if (empty($matches[1])) return true;
+
+        # Obtain context to fill in gaps
+        $context = $this->getContext();
         if (empty($context)) {
-            // Unable to parse context
-            // REDCap::logEvent("Unable to parse context for WHATSAPP email message", )
-            $this->emError("Unable to parse context for this email", $bt);
+            $this->emError("Unable to parse context for this email", debug_backtrace(0));
             return false;
         }
-
         $this->emDebug("EMAIL CONTEXT: " . json_encode($context));
-        $record_id = $context['record_id'] ?? "";
-        $trigger = $context['trigger'];
 
-        # Parse the contents of the action tag "phone_number, log_field(optional), log_event(optional)"
-        $parts = array_map('trim', explode(",",$matches[1]));
-        $number    = $parts[0];
-        $log_field = !empty($parts[1]) ? $parts[1] : NULL;
-        $log_event_name = !empty($parts[2]) ? $parts[2] : NULL;
+        // Remove apostrophes and spaces from the function arguments
+        $args = preg_replace(['/\'/', '/"/', '/\s+/', '/_{6}/'], ['','','',''], $matches[1]);
+        $parts = explode(",",$args);
+        $this->emDebug("PARTS: " . json_encode($parts));
 
-        // if (empty($record_id)) {
-        //     $this->emDebug("Record ID missing");
-        //     return false;
-        // }
+        # Required Parameters
+        $number       = $parts[0];
+        $project_id   = empty($parts[1])   ? ($context['project_id'] ?? '' ) : $parts[1];
+        $this->emDebug("project_id", $_GET['pid'], $project_id, PROJECT_ID);
 
+        # Validate and Define Project ID
+        if (!empty($project_id)) {
+            if (empty($_GET['pid'])) $_GET['pid']=$project_id;
+            if (!defined("PROJECT_ID")) define('PROJECT_ID', $project_id);
+        }
+        if (empty($_GET['pid'])) {
+            $this->emDebug("Missing required Project Context", $parts, $context);
+            return false;
+        }
+        global $Proj;
+        $thisProj = ($Proj->project_id ?? NULL == $project_id) ? $Proj : new Project($project_id);
+
+
+        $record_id    = empty($parts[2])   ? ($context['record_id'] ?? NULL) : $parts[2];
+        $event_name   = empty($parts[3])   ? ($context['event_name'] ?? '')  : $parts[3];
+        $event_id     = empty($event_name) ? ($context['event_id'] ?? NULL)  : $thisProj->getEventIdUsingUniqueEventName($event_name);
+        $instance     = empty($parts[4])   ? ($context['instance'] ?? 1)     : $parts[4];
+        $log_field    = $parts[5] ?? '';
+        $log_event_id = empty($parts[6])   ? ($event_id ?? '')               : $thisProj->getEventIdUsingUniqueEventName($parts[6]);
+
+        # Validate Number
         if (empty($number)) {
-            $this->emDebug("Number missing for context: ", $context);
+            $this->emDebug("Number missing: ", $parts, $context);
             return false;
         }
 
-        # See if field logging has been requested
-        $log_event_id = '';
-        if (!empty($log_field)) {
-            // Default an empty log_event_name to the current event of the alert
-            $log_event_id = empty($log_event_name) ? $context['event_id'] : REDCap::getEventIdFromUniqueEvent($log_event_name);
-        }
-
-        // if (!empty($log_field) && empty($log_event) && \REDCap::isLongitudinal()) $log_event = current(\REDCap::getEventNames(true));
-        // $field_name = trim($parts[1]);
-        // $eventNames = \REDCap::getEventNames(true);
-        // $event_name = ( !empty($parts[2]) && in_array(trim($parts[2]),$eventNames) ) ? trim($parts[2]) : current($eventNames);
-        // Get the value for the what's app number
-        // $params = [
-        //     "records" => [$record_id],
-        //     "fields" => [$field_name],
-        //     "return_format" => "json",
-        //     "events" => [$event_name]
-        // ];
-        // $q = \REDCap::getData($params);
-        // $results = json_decode($q,true);
-        // if (!empty($results['errors'])) {
-        //     \REDCap::logEvent("Error obtaining What's App number for record $record_id in field $field_name");
-        //     $this->emError("Error querying What's App Number: ", $params, $results);
-        //     return false;
-        // }
-        // if (empty($results[0][$field_name])) {
-        //     \REDCap::logEvent("Unable to find a number for record $record_id in field $field_name");
-        //     $this->emDebug("Unable to find a number in the $field_name field for record $record_id");
-        //     return false;
-        // }
-        //
-        // $number = trim($results[0][$field_name]);
-        // $this->emDebug($results, $number);
-
+        # Load settings
         $sid = $this->getProjectSetting('sid');
         $token = $this->getProjectSetting('token');
         $fromNumber = $this->getProjectSetting('from-number');
-        $callbackUrl = $this->getUrl('statusCallback.php', true, true);
-
-        $callbackUrl = str_replace("redcap.local","c4054076e31e.ngrok.io",$callbackUrl);
-        $this->emDebug($callbackUrl);
-
-        if (empty($sid) || empty($token) || empty($fromNumber)) {
-            REDCap::logEvent("Missing required sid, token, or from number in What's App Alerts configuration");
+        if (empty($sid) || empty($token) || empty($fromNumber) || empty($project_id)) {
+            REDCap::logEvent(
+                "What's App Configuration Error",
+                "Missing required sid, token, or from number in What's App Alerts configuration",
+                "",$record_id,$event_id,$project_id
+            );
             $this->emDebug("Missing sid or token or number");
             return false;
         }
 
-        # strip tags from message and format number
+        # Callback URL for delivery updates
+        $callbackUrl = $this->getUrl('statusCallback.php', true, true);
+        $callbackUrl = str_replace("redcap.local","a6b7e17cbaf8.ngrok.io",$callbackUrl);
+        $this->emDebug($callbackUrl);
+
+        # strip tags from message
         $body = strip_tags($message, "");
-        $this->emDebug("Number before: " . $number);
-        if (strpos($number, "+",0) === false) $number = "+" . $number;
-        $this->emDebug("Record: $record_id, Number: $number, From: $fromNumber, Body: $body");
+
+        # format number for What's App E164 format.  Consider adding better validation here
+        $toNumber = preg_replace( '/[^\d]/', '', $number);
+        $toNumber = '+' . $toNumber;
+        $this->emDebug("Record: $record_id, Original: $number, To: $toNumber, From: $fromNumber, Body: $body");
 
         # Send message
         $client = new \Twilio\Rest\Client($sid, $token);
         $trans = $client->messages->create(
-            "whatsapp:" . $number, [
+            "whatsapp:" . $toNumber, [
             "from" => "whatsapp:" . $fromNumber,
             "body" => $body,
             "statusCallback" => $callbackUrl
         ]);
 
-        // Log the message
+        # Log the message to the external message logs by SID so we can find it
         $status = $trans->status . (empty($trans->errors) ? "" : " - " . $trans->errors);
         $payload = [
-            'record'       =>$record_id,
-            'number'       =>$number,
-            'project_id'   =>PROJECT_ID,
-            'event_id'     =>$context['event_id'] ?? '',
-            'instance'     =>$context['instance'] ?? '',
-            'instrument'   =>$context['instrument'] ?? '',
-            'alert_id'     =>$context['alert_id'] ?? '',
-            'sid'          =>$trans->sid,
-            'status'       =>$status,
-            'log_field'    =>$log_field,
-            'log_event_id' =>$log_event_id
+            'record'         =>$record_id,
+            'number'         =>$toNumber,
+            'project_id'     =>$project_id,
+            'event_id'       =>$event_id,
+            'event_name'     =>$event_name,
+            'instance'       =>$instance,
+            'trigger'        =>$context['trigger']    ?? '',
+            'trigger_id'     =>$context['trigger_id'] ?? '',
+            'log_field'      =>$log_field,
+            'log_event_id'   =>$log_event_id,
+            'sid'            =>$trans->sid,
+            'status'         =>$status,
         ];
-
         $r = $this->log($body, $payload);
-        $this->emDebug("Just logged payload to log_id $r");
-        // $entry = $this->queryLogs("select record, number, project_id, event_id, instance, instrument, alert_id, sid, status, log_field, log_event_id  where log_id = $r");
+        $this->emDebug("Just logged payload to log_id $r with $status");
 
-        # If the configuration calls for logging the status to a field, do it.
-        if (!empty($log_field)) {
-            $this->updateAlertLogField(PROJECT_ID,$record_id,$log_field,$log_event_id,$status);
+        # See if logging message status has been requested
+        if (!empty($log_field) && !empty($log_event_id)) {
+            // Default an empty log_event_name to the current event of the alert
+            $this->updateAlertLogField($project_id,$record_id,$log_field,$log_event_id,$status);
         }
 
+
+        // Debug issues...
         if ($trans->status !== "queued") {
             REDCap::logEvent("Error sending What's App message", $status,"",$record_id, null, PROJECT_ID);
             $msg = "Error with transmission: " . $status;
@@ -223,46 +237,102 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
 	}
 
 
+    /**
+     * Twilio calls a callback URL.  This function takes the results of that callback and uses them to update
+     * both the AlertLogField and the external_module_log_settings entries
+     * @param $sid
+     * @param $status
+     * @throws \Exception
+     */
+	public function updateLogStatusCallback() {
+        $this->emDebug("Callback", json_encode($_POST));
+        /*
+            [SmsSid] => SMeb941545a1eb46cab32c67df2f8bef62
+            [SmsStatus] => sent
+            [Body] => This is *bold* and _underlined_...
+            [MessageStatus] => sent
+            [ChannelToAddress] => +1650380XXXX
+            [To] => whatsapp:+16503803405
+            [ChannelPrefix] => whatsapp
+            [MessageSid] => SMeb941545a1eb46cab32c67df2f8bef62
+            [AccountSid] => AC4c78ad3161bed65c08e36f77847f914a
+            [StructuredMessage] => false
+            [From] => whatsapp:+14155238886
+            [ApiVersion] => 2010-04-01
+            [ChannelInstallSid] => XEcc20d939f803ee381f2442185d0d5dc5
+            (optional)
+            [ErrorCode] => 63016,
+            [EventType] => "UNDELIVERED"
+         */
+        $sid    = $_POST['SmsSid'] ?? null;
+        $status = $_POST['SmsStatus'] ?? '';
+        $error  = empty($_POST['ErrorCode']) ? '' : " Error#" . $_POST['ErrorCode'];
+        // $event = empty($_POST['EventType']) ? '' : " Event:" . $_POST['EventType'];
+        $update = $status.$error;
 
-	public function updateLogStatusCallback($sid, $status) {
+        if (empty($sid) || empty($update)) {
+            $this->emDebug("Unable to parse statusCallback:", $_POST);
+            return false;
+        }
+
         # Get the em log entry for this sid
-        $q = $this->queryLogs("select log_id, project_id, record, instance, sid, log_field, log_event_id where sid = ?", [$sid]);
+        $q = $this->queryLogs("select log_id, sid, status, project_id, record, log_field, log_event_id where sid = ?", [$sid]);
         if ($row = $q->fetch_assoc()) {
-            // $this->emDebug($row);
             $log_id = $row['log_id'];
             $project_id = $row['project_id'];
             $record_id = $row['record'];
             $log_field = $row['log_field'];
             $log_event_id = $row['log_event_id'];
-            if(!empty($log_field)) $this->updateAlertLogField($project_id, $record_id, $log_field, $log_event_id, $status);
+            $old_status = $row['status'];
+            $this->updateAlertLogField($project_id, $record_id, $log_field, $log_event_id, $status);
 
             # Update the external module log table as well
             $query = $this->createQuery();
-            $query->add('replace into redcap_external_modules_log_parameters (log_id, name, value) values (?, ?, ?)', [
-                $log_id,
-                'status_update',
-                $status
-            ]);
+            $query->add('replace into redcap_external_modules_log_parameters (log_id, name, value) values (?, ?, ?)',
+                [
+                    $log_id,
+                    'status_update',
+                    $status
+                ]
+            );
             $query->execute();
-            $this->emDebug("Setting $log_id last_status to $status: " . $query->affected_rows);
+            $this->emDebug("Updating $log_id status from $old_status to $status");
+
             $query = $this->createQuery();
-            $query->add('replace into redcap_external_modules_log_parameters (log_id, name, value) values (?, ?, ?)', [
-                $log_id,
-                'status_modified',
-                date('Y-m-d H:i:s')
-            ]);
+            $query->add('replace into redcap_external_modules_log_parameters (log_id, name, value) values (?, ?, ?)',
+                [
+                    $log_id,
+                    'status_modified',
+                    date('Y-m-d H:i:s')
+                ]
+            );
             $query->execute();
-            $this->emDebug($query->affected_rows);
         }
     }
 
-
+    /**
+     * The EM supports writing the current message status to a field in the project defined with an field_name and
+     * event_name.  This is not always possible depending on the context and inputs provided to the @WHATSAPP tag
+     * @param $project_id
+     * @param $record_id
+     * @param $log_field
+     * @param $log_event_id
+     * @param $status
+     * @return bool
+     * @throws \Exception
+     */
 	public function updateAlertLogField($project_id, $record_id, $log_field, $log_event_id, $status) {
 
-        global $Proj;
-        $logProj = ($Proj->project_id ?? 0 == $project_id) ? $Proj : new Project($project_id);
+	    # Verify required inputs
+	    if (empty($project_id) || empty($record_id) || empty($log_field) || empty($log_event_id)) {
+	        // Missing required fields - abort
+            $this->emDebug("Unable to log to alert field: " . func_get_args());
+            return false;
+        }
 
-        // Verify log field / event are valid
+        # Verify valid inputs
+        global $Proj;
+        $logProj = ($Proj->project_id ?? NULL == $project_id) ? $Proj : new Project($project_id);
         $error = "";
         $field_metadata = $logProj->metadata[$log_field] ?? null;
         $form_name = $field_metadata['form_name'] ?? null;
@@ -275,9 +345,8 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
         } elseif (!in_array($form_name, $logProj->eventsForms[$log_event_id])) {
             $error = "form $form_name is not enabled in event $log_event_id";
         }
-
         if (!empty($error)) {
-            REDCap::logEvent("What's App Error", $error, "", $record_id, null, $project_id);
+            REDCap::logEvent("What's App Unable to update Log Field: $", $error, "", $record_id, null, $project_id);
             $this->emDebug($error);
             return false;
         }
@@ -285,14 +354,13 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
         # save update
         $payload = [
             'project_id' => $project_id,
-            'dataFormat' => 'json',
-            'data' => json_encode([
-                [
-                    $logProj->table_pk => $record_id,
-                    'redcap_event_name' => REDCap::getEventNames(true,false, $log_event_id),
-                    $log_field => $status
+            'data' => [
+                $record_id => [
+                    $log_event_id => [
+                        $log_field => $status
+                    ]
                 ]
-            ])
+            ]
         ];
         $result = REDCap::saveData($payload);
         if (!empty($result['errors'])) {
