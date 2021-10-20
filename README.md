@@ -11,7 +11,7 @@ number from Twilio with your Facebook Business identity.  More information can b
 [here](https://www.twilio.com/docs/whatsapp/tutorial/connect-number-business-profile):
 
 For development you can set up a temporary number but must respond from the destination number (your what's app)
-every 24 hours in order to enable additonal mesages.
+every 24 hours in order to enable additional messages.
 
 ## How to Configure
 To use the module you replace the subject of the email with an action-tag like function.
@@ -24,11 +24,19 @@ or
 This module uses REDCap piping to supply the necessary context for sending the message
 as the redcap_email hook does not otherwise provide any information about the project/record/etc...
 
-In additon to the basic syntax above, it also supports additional arguments to provide context and additional features.
+In addition to the basic syntax above, it also supports additional arguments to provide context and additional features.
 The full context is:
 
 `
-@WHATSAPP( PHONE_NUMBER, PROJECT_ID (optional), RECORD_ID (optional), EVENT_NAME (optional), INSTANCE (optional=1), LOG_FIELD_NAME (optional), LOG_EVENT_NAME (optional) )
+@WHATSAPP(
+  PHONE_NUMBER,
+  PROJECT_ID (optional),
+  RECORD_ID (optional),
+  EVENT_NAME (optional),
+  INSTANCE (optional=1),
+  LOG_FIELD_NAME (optional),
+  LOG_EVENT_NAME (optional)
+)
 `
 
 In some cases, the module is able to determine the 'context' of the email message.  For example,
@@ -92,7 +100,7 @@ or, the syntax also supports quotes or no quotes
 or, if you were using any 'delay' after the logic was true, you would want to include all parameters:
 
 `
-@WHATSAPP([baseline_arm_1][phone], [project-id], [basline_arm_1][record_id],[event-name], [current-instance], alert_status)
+@WHATSAPP([baseline_arm_1][phone], [project-id], [baseline_arm_1][record_id],[event-name], [current-instance], alert_status)
 `
 
 You can also optionally include a final log_event_id argument if you wish to store the `alert_status`
