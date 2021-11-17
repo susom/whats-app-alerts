@@ -11,7 +11,7 @@ number from Twilio with your Facebook Business identity.  More information can b
 [here](https://www.twilio.com/docs/whatsapp/tutorial/connect-number-business-profile):
 
 For development you can set up a temporary number but must respond from the destination number (your what's app)
-every 24 hours in order to enable additonal mesages.
+every 24 hours in order to enable additional messages.
 
 ## How to Configure
 To use the module you replace the subject of the email with an action-tag like function.
@@ -24,11 +24,19 @@ or
 This module uses REDCap piping to supply the necessary context for sending the message
 as the redcap_email hook does not otherwise provide any information about the project/record/etc...
 
-In additon to the basic syntax above, it also supports additional arguments to provide context and additional features.
+In addition to the basic syntax above, it also supports additional arguments to provide context and additional features.
 The full context is:
 
 `
-@WHATSAPP( PHONE_NUMBER, PROJECT_ID (optional), RECORD_ID (optional), EVENT_NAME (optional), INSTANCE (optional=1), LOG_FIELD_NAME (optional), LOG_EVENT_NAME (optional) )
+@WHATSAPP(
+  PHONE_NUMBER,
+  PROJECT_ID (optional),
+  RECORD_ID (optional),
+  EVENT_NAME (optional),
+  INSTANCE (optional=1),
+  LOG_FIELD_NAME (optional),
+  LOG_EVENT_NAME (optional)
+)
 `
 
 In some cases, the module is able to determine the 'context' of the email message.  For example,
@@ -92,13 +100,50 @@ or, the syntax also supports quotes or no quotes
 or, if you were using any 'delay' after the logic was true, you would want to include all parameters:
 
 `
-@WHATSAPP([baseline_arm_1][phone], [project-id], [basline_arm_1][record_id],[event-name], [current-instance], alert_status)
+@WHATSAPP([baseline_arm_1][phone], [project-id], [baseline_arm_1][record_id],[event-name], [current-instance], alert_status)
 `
 
 You can also optionally include a final log_event_id argument if you wish to store the `alert_status`
 in a field from a different event than the actual Alert.
 
 ## TODO:
+
+WHATS APP CONFIGURATION LOGIC:
+
+Template Config Page:
+1) Get the current templates
+2) Specify a template for 'break the ice'
+3) request a new template
+4) delete a template
+
+In Alert Config:
+1. Select What's App icon
+2. Hide rest of normal form and display new form
+3. dropdown of the template to use OR free-text
+   1. if the template has variables, you need to define the redcap fields or text to go into the variable location
+      1. VAR 1: "text or redcap_field"
+4. variable for phone number
+5. variable for project_id (hidden)
+6. variable for record_id (hidden)
+7.
+
+
+On Project-level, define 'break-the-ice' message temaplte.  This is the
+template that will be used if a custom message is sent outside of
+an open 24 window.
+
+
+
+
+
+
+
+- Build a page to download What's App Templates and store them in the EM Config
+  - should support ability to refresh templates
+- Define your 'ice breaker' template that is sent when something runs over 24 hours
+- Store messages and determine if ice breaker needs to be sent
+- build ui to configure outgoing messages
+
 
 - Edit UI of Alerts and Notifications so that subject has hint about how to set up and send with What's App
 ```help

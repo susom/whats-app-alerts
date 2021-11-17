@@ -32,13 +32,20 @@
 	"links": {
 		"project": [
             {
-                "name": "View What's App Logs",
-                "icon": "fas fa-question-circle",
-                "url": "logs.php",
+                "name": "What's App",
+                "icon": "fab fa-whatsapp",
+                "url": "pgaes/info.php",
+                "show-header-and-footer": true
+            },
+            {
+                "name": "What's App Templates",
+                "icon": "fab fa-whatsapp",
+                "url": "pages/templates.php",
                 "show-header-and-footer": true
             }
 
-		],
+
+        ],
 		"control-center": [
 
 		]

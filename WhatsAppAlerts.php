@@ -8,9 +8,13 @@ require_once "vendor/autoload.php";
 use \Project;
 use \REDCap;
 
+require_once("classes/Template.php");
+
+
 class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
 
     use emLoggerTrait;
+
 
     public function __construct() {
 		parent::__construct();
@@ -179,7 +183,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
 
         # Callback URL for delivery updates
         $callbackUrl = $this->getUrl('statusCallback.php', true, true);
-        $callbackUrl = str_replace("redcap.local","a6b7e17cbaf8.ngrok.io",$callbackUrl);
+        $callbackUrl = str_replace("redcap.local","b2092c2da177.ngrok.io",$callbackUrl);
         $this->emDebug($callbackUrl);
 
         # strip tags from message
@@ -370,4 +374,43 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
         $this->emDebug("Just updated $log_field in event $log_event_id with $status");
         return true;
     }
+
+
+
+    public function getWhatsAppTemplates() {
+        $sid = $this->getProjectSetting('sid');
+        $token = $this->getProjectSetting('token');
+
+        $client = new \Twilio\Rest\Client($sid, $token);
+        $response = $client->request(
+            'GET',
+            'https://messaging.twilio.com/v1/Channels/WhatsApp/Templates'
+        );
+
+        if ($response->ok()) {
+            // Templates is an array with key 'whatsapp_templates'
+            $content = $response->getContent();
+
+            $templates = [];
+
+            foreach ($content['whatsapp_templates'] as $t) {
+                $sid = $t['sid'];
+                foreach ($t['languages'] as $l) {
+                    $language = $l['language'];
+                    $key = $sid . "_" . $language;
+
+//                    $templates[$key] =
+                }
+            }
+
+
+            return $response->getContent();
+        } else {
+            $this->emError("Unable to fetch templates", $response->getStatusCode(), $response->__toString());
+            return false;
+        }
+    }
+
+
+
 }
