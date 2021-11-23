@@ -6,80 +6,39 @@ namespace Stanford\WhatsAppAlerts;
  * Class Template
  * @property WhatsAppAlerts $module
  */
-class Template
+class MessageLogger
 {
-    protected $config;
-    protected $name;
-    protected $sid;
-    protected $languages;
-
     private $module;
 
-//    private $status;
-//    private $content;
-//    private $components;
-
-    public function __construct($module, $config) {
-        $this->module    = $module;
-        $this->config    = $config;
-
-        $this->name      = $config['template_name'];
-        $this->sid       = $config['sid'];
-        $this->languages = $config['languages'];
+    public function __construct($module) {
+        $this->module = $module;
     }
 
     /**
-     * loop through all language variants for template
-     * @return array
+     * Log an initial WAM transmission
+     * @param $sid
+     * @param $status
+     * @param WhatsAppMessage $wam
      */
-    public function getAllVariants() {
-        $entries = [];
-
-        foreach ($this->languages as $l) {
-            $key = $this->sid . "/" . $l['language'];
-
-            $entries[$key] = [
-                "template_name"     => $this->name,
-                "sid"               => $this->sid,
-                "status"            => $l['status'] . ($l['rejection_reason'] ? " / " . $l['rejection_reason'] : ''),
-                "language"          => $l['language'],
-                "date_updated"      => $l['date_updated'],
-                "content"           => $l['content'],
-                "variables"         => count($this->getVariables($l['content'])),
-                "components"        => implode(", ", $this->getComponentsSummary($l['components']))
-            ];
-        }
-        return $entries;
+    public function logTransmission($sid, $status, $wam) {
+        $payload = [
+            'record'         =>$wam->getRecordId(),
+            'number'         =>$wam->getNumber(),
+            'project_id'     =>$wam->getProjectId(),
+            'event_id'       =>$wam->getEventId(),
+            'event_name'     =>$wam->getEventName(),
+            'instance'       =>$wam->getInstance(),
+            'trigger'        =>$wam->getTrigger(),
+            'trigger_id'     =>$wam->getTriggerId(),
+            'log_field'      =>$wam->getLogField(),
+            'log_event_id'   =>$wam->getLogEventId(),
+            'sid'            =>$sid,
+            'status'         =>$status,
+        ];
+        $r = $this->module->log($wam->getMessage(), $payload);
+        $this->module->emDebug("Just logged payload to log_id $r with $status");
     }
 
-
-    /**
-     * Convert the components object into a summary for visualization
-     * @param $components
-     * @return array
-     */
-    private function getComponentsSummary($components) {
-        $result =  [];
-        foreach ($components as $component) {
-            if ($component['type'] = 'BUTTONS') {
-                foreach ($component['buttons'] as $button) {
-                    $result[] = "[" . $button['index'] . ":" . $button['type'] . "] " . $button['text'];
-                }
-            } else {
-                $this->module->emDebug("New Component Type", $component);
-            }
-        }
-        return $result;
-    }
-
-
-    private function getVariables($content) {
-        // https://regex101.com/r/VvU0i3/1
-        $re = '/(?\'token\'\{{2}(?\'index\'\d+)\}{2})/m';
-        //$str = 'Dear {{1}}, you have one or more messages waiting for you regarding the {{2}}{{32}} study.  Please press the button or respond with a \'y\' to receive them.';
-        preg_match_all($re, $content, $matches, PREG_SET_ORDER, 0);
-        return $matches;
-    }
 
 
 }

@@ -52,7 +52,7 @@
 	},
 
 	"no-auth-pages": [
-        "statusCallback"
+        "pages/statusCallback"
 	],
 
 	"project-settings": [
@@ -72,6 +72,12 @@
             "key": "from-number",
             "name": "<b>From Number</b><br>Must be in e164 format (e.g. +16508675309 or +255121234567)",
             "required": true,
+            "type": "text"
+        },
+        {
+            "key": "callback-override",
+            "name": "<b>Callback Override Url</b><br>For debugging purposes, you can replace your redcap url with a custom url (e.g. ngrok)",
+            "required": false,
             "type": "text"
         },
         {

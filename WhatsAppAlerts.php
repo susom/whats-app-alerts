@@ -5,116 +5,26 @@ require_once "emLoggerTrait.php";
 
 require_once "vendor/autoload.php";
 
+use mysql_xdevapi\Exception;
 use \Project;
 use \REDCap;
 
 require_once("classes/Template.php");
+require_once("classes/WhatsAppMessage.php");
+require_once("classes/MessageLogger.php");
 
 
 class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
 
     use emLoggerTrait;
 
-
     public function __construct() {
 		parent::__construct();
 		// Other code to run when object is instantiated
 	}
 
-    /**
-     * Because the redcap_email hook doesn't have any context (e.g. record, project, etc) it can sometimes be hard
-     * to know if any context applies.  Generally you can provide details via piping in the subject, but only to a
-     * certain extent.  For example, a scheduled ASI email will have a record, but no event / project context
-     */
-	public function getContext() {
-        /*
-            [file] => /var/www/html/redcap_v10.8.2/DataEntry/index.php
-            [line] => 345
-            [function] => saveRecord
-            [class] => DataEntry
-            [type] => ::
-            [args] => Array
-                (
-                    [0] => 21
-                    [1] => 1
-                    [2] =>
-                    [3] =>
-                    [4] =>
-                    [5] => 1
-                    [6] =>
-                )
 
-
-        // From an immediate ASI
-        scheduleParticipantInvitation($survey_id, $event_id, $record)
-
-            [file] => /var/www/html/redcap_v10.8.2/Classes/SurveyScheduler.php
-            [line] => 1914
-            [function] => scheduleParticipantInvitation
-            [class] => SurveyScheduler
-            [type] => ->
-            [args] => Array
-                (
-                    [0] => 11
-                    [1] => 53
-                    [2] => 21
-                )
-
-         */
-
-        # Get Context
-        $bt = debug_backtrace(0);
-        // $this->emDebug($bt);
-
-        $context = [];
-        foreach ($bt as $t) {
-            $function = $t['function'] ?? FALSE;
-            $class = $t['class'] ?? FALSE;
-            $args = preg_replace(['/\'/', '/"/', '/\s+/', '/_{6}/'], ['','','',''], $t['args']);
-
-            // If email is being sent from an Alert - get context from debug_backtrace using function:
-            // sendNotification($alert_id, $project_id, $record, $event_id, $instrument, $instance=1, $data=array())
-            if ($function == 'sendNotification' && $class == 'Alerts') {
-                $context['trigger']    = "Alert";
-                $context['trigger_id'] = $args[0];
-                $context['project_id'] = $args[1];
-                $context['record_id']  = $args[2];
-                $context['event_id']   = $args[3];
-                $context['instance']   = $args[5];
-                break;
-            }
-
-            if ($function == 'scheduleParticipantInvitation' && $class == 'SurveyScheduler') {
-                // scheduleParticipantInvitation($survey_id, $event_id, $record)
-                $context['trigger']    = "ASI (Immediate)";
-                $context['trigger_id'] = $args[0];
-                $context['event_id']   = $args[1];
-                $context['record_id']  = $args[2];
-                break;
-            }
-
-            if ($function == 'SurveyInvitationEmailer' && $class == 'Jobs') {
-                $context['trigger']    = "ASI (Delayed)";
-                $context['trigger_id'] = "";
-                // Unable to get project_id in this case
-                break;
-            }
-
-        }
-
-        // Set event_name from event_id
-        if (isset($context['event_id']) && !isset($context['event_name'])) {
-            $context['event_name'] = REDCap::getEventNames(true, false, $context['event_id']);
-        }
-        if (isset($context['event_name']) && !isset($context['event_id'])) {
-            $context['event_id'] = REDCap::getEventIdFromUniqueEvent($context['event_name']);
-        }
-        return $context;
-    }
-
-
-
-	public function redcap_email( $to, $from, $subject, $message, $cc, $bcc, $fromName, $attachments ) {
+    public function old_redcap_email( $to, $from, $subject, $message, $cc, $bcc, $fromName, $attachments ) {
 
         # Check Subject for '@WHATSAPP' action tag
         # Function takes (phone_number, project_id (context), record_id = context if available, event_name = '', instance_id = 1, log_field, log_event_name = context if available)
@@ -238,7 +148,238 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
 
         // Prevent actual email
         return FALSE;
+    }
+
+
+    public function json_validate($string, $assoc = true)
+    {
+        // decode the JSON data
+        $result = json_decode($string, $assoc);
+
+        // switch and check possible JSON errors
+        switch (json_last_error()) {
+            case JSON_ERROR_NONE:
+                $error = ''; // JSON is valid // No error has occurred
+                break;
+            case JSON_ERROR_DEPTH:
+                $error = 'The maximum stack depth has been exceeded.';
+                break;
+            case JSON_ERROR_STATE_MISMATCH:
+                $error = 'Invalid or malformed JSON.';
+                break;
+            case JSON_ERROR_CTRL_CHAR:
+                $error = 'Control character error, possibly incorrectly encoded.';
+                break;
+            case JSON_ERROR_SYNTAX:
+                $error = 'Syntax error, malformed JSON.';
+                break;
+            // PHP >= 5.3.3
+            case JSON_ERROR_UTF8:
+                $error = 'Malformed UTF-8 characters, possibly incorrectly encoded.';
+                break;
+            // PHP >= 5.5.0
+            case JSON_ERROR_RECURSION:
+                $error = 'One or more recursive references in the value to be encoded.';
+                break;
+            // PHP >= 5.5.0
+            case JSON_ERROR_INF_OR_NAN:
+                $error = 'One or more NAN or INF values in the value to be encoded.';
+                break;
+            case JSON_ERROR_UNSUPPORTED_TYPE:
+                $error = 'A value of a type that cannot be encoded was given.';
+                break;
+            default:
+                $error = 'Unknown JSON error occured.';
+                break;
+        }
+
+        if ($error !== '') {
+            return array(false, $error);
+        } else {
+            return array(true, $result);
+        }
+    }
+
+    public function parseHtmlishJson($input) {
+
+        $this->emDebug("STRING1: " . $input);
+        $string = $this->replaceNbsp($input);
+
+        $this->emDebug("STRING2: " . $string);
+
+        $junk = [
+            "<p>",
+            "<br />",
+            "</p>"
+        ];
+
+        // Remove HTML tags inserted by UI
+        $string = str_replace($junk, '', $string);
+
+        $this->emDebug("STRING3: " . $string);
+
+        // See if it is valid json
+        list($success, $result) = $this->json_validate($string);
+
+        $this->emDebug($success,$result);
+
+        if ($success) {
+            return $result;
+        } else {
+            $this->emDebug($result, $input, $string);
+            return false;
+        }
+    }
+
+	public function redcap_email( $to, $from, $subject, $message, $cc, $bcc, $fromName, $attachments ) {
+
+        # Determine if this email is a What's App encoded message
+        $json = $this->parseHtmlishJson($message);
+
+        # Skip hook for non-what's app messages
+        if ($json === FALSE || !isset($json['type']) || $json['type'] != "whatsapp") {
+            $this->emDebug("Skipping Email", $message);
+            return true;
+        }
+
+        # Check to parse json from email body
+        /*
+             {
+                "type": "whatsapp",
+                "template_id": "ACe3ab1c8d7222aedd52dc8fff05d1feb9_en",
+                "template": "messages_awaiting",
+                "language": "en",
+                "variables": [ "[event_1_arm_1][baseline]", "Hello" ],
+                "body": "blank if free text, otherwise will be calculated based on template and variables",
+                "phone": "[event_1_arm_1][whats_app_number]",
+                "context": {
+                    "project_id": "[project-id]",
+                    "event_name": "[event-name]",
+                    "record_id": "[record-id]",
+                    "instance": "[current-instance]"
+                }
+            }
+        */
+
+
+        // $this->emDebug("EMAIL CONTEXT: " . json_encode($context));
+        // Remove apostrophes and spaces from the function arguments
+        // $args = preg_replace(['/\'/', '/"/', '/\s+/', '/_{6}/'], ['','','',''], $matches[1]);
+        // $parts = explode(",",$args);
+        // $this->emDebug("PARTS: " . json_encode($parts));
+        # Required Parameters
+        // $number     = $m->getNumber();
+        // # Validate and Define Project ID
+        // if (!empty($project_id)) {
+        //     if (empty($_GET['pid'])) $_GET['pid']=$project_id;
+        //     if (!defined("PROJECT_ID")) define('PROJECT_ID', $project_id);
+        // }
+        // if (empty($_GET['pid'])) {
+        //     $this->emDebug("Missing required Project Context", $parts, $context);
+        //     return false;
+        // }
+        //
+        // global $Proj;
+        // $thisProj = ($Proj->project_id ?? NULL == $project_id) ? $Proj : new Project($project_id);
+        //
+        //
+        // $record_id    = empty($parts[2])   ? ($context['record_id'] ?? NULL) : $parts[2];
+        // $event_name   = empty($parts[3])   ? ($context['event_name'] ?? '')  : $parts[3];
+        // $event_id     = empty($event_name) ? ($context['event_id'] ?? NULL)  : $thisProj->getEventIdUsingUniqueEventName($event_name);
+        // $instance     = empty($parts[4])   ? ($context['instance'] ?? 1)     : $parts[4];
+        // $log_field    = $parts[5] ?? '';
+        // $log_event_id = empty($parts[6])   ? ($event_id ?? '')               : $thisProj->getEventIdUsingUniqueEventName($parts[6]);
+        //
+        // # Validate Number
+        // if (empty($number)) {
+        //     $this->emDebug("Number missing: ", $parts, $context);
+        //     return false;
+        // }
+
+
+        # Create WhatsAppMessage Object
+        $m = new WhatsAppMessage($this, $json);
+        if (! $m->configurationValid()) return false;
+
+        # Load settings
+        $sid = $this->getProjectSetting('sid');
+        $token = $this->getProjectSetting('token');
+        $fromNumber = $this->getProjectSetting('from-number');
+        $callbackUrl = $this->getCallbackUrl();
+        if (empty($sid) || empty($token) || empty($fromNumber) || empty($m->getProjectId())) {
+            REDCap::logEvent(
+                "What's App Configuration Error",
+                "Missing required sid, token, or from number in What's App Alerts configuration",
+                "",$m->getRecordId(),$m->getEventId(),$m->getProjectId()
+            );
+            $this->emDebug("Missing sid or token or number");
+            return false;
+        }
+
+        # Send message
+        $client = new \Twilio\Rest\Client($sid, $token);
+        $this->emDebug("About to send message to " . $m->getNumber());
+        try {
+            $trans = $client->messages->create(
+                "whatsapp:" . $m->getNumber(), [
+                "from" => "whatsapp:" . $fromNumber,
+                "body" => $m->getMessage(),
+                "statusCallback" => $callbackUrl
+            ]);
+        } catch (\Exception $e) {
+            $this->emError("Caught exception: " . $e->getMessage());
+        }
+
+        # Log the message to the external message logs by SID so we can find it
+        $status = $trans->status . (empty($trans->errors) ? "" : " - " . $trans->errors);
+        $this->logTransmission($trans->sid, $status, $m);
+
+        # See if logging message status has been requested
+        $log_field = $m->getLogField();
+        $log_event_id = $m->getLogEventId();
+        if (!empty($log_field) && !empty($log_event_id)) {
+            // Default an empty log_event_name to the current event of the alert
+            $this->updateAlertLogField($m->getProjectId(),$m->getRecordId(),$log_field,$log_event_id,$status);
+        }
+
+        // Debug issues...
+        if ($trans->status !== "queued") {
+            REDCap::logEvent("Error sending What's App message", $status,"",$m->getRecordId(), null, $m->getProjectId());
+            $msg = "Error with transmission: " . $status;
+            $this->emDebug($msg);
+        }
+
+        // Prevent actual email
+        return FALSE;
 	}
+
+    /**
+     * Log initial transmission
+     * @param $sid
+     * @param $status
+     * @param WhatsAppMessage $m
+     */
+    public function logTransmission($sid, $status, WhatsAppMessage $m) {
+        $payload = [
+            'record'         => $m->getRecordId(),
+            'number'         => $m->getNumber(),
+            'project_id'     => $m->getProjectId(),
+            'event_id'       => $m->getEventId(),
+            'event_name'     => $m->getEventName(),
+            'instance'       => $m->getInstance(),
+            'trigger'        => $m->getTrigger(),
+            'trigger_id'     => $m->getTriggerId(),
+            'log_field'      => $m->getLogField(),
+            'log_event_id'   => $m->getLogEventId(),
+            'sid'            => $sid,
+            'status'         => $status,
+        ];
+        $r = $this->log($m->getMessage(), $payload);
+        $this->emDebug("Just logged payload to log_id $r with $status");
+    }
+
+
+
 
 
     /**
@@ -377,7 +518,15 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
 
 
 
-    public function getWhatsAppTemplates() {
+
+
+
+    /**
+     * Pull down the templates for the project and store them in an em setting
+     * @return array
+     * @throws \Twilio\Exceptions\ConfigurationException
+     */
+    public function cacheWhatsAppTemplates() {
         $sid = $this->getProjectSetting('sid');
         $token = $this->getProjectSetting('token');
 
@@ -387,30 +536,57 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
             'https://messaging.twilio.com/v1/Channels/WhatsApp/Templates'
         );
 
+        $templates = [];
         if ($response->ok()) {
             // Templates is an array with key 'whatsapp_templates'
             $content = $response->getContent();
-
-            $templates = [];
 
             foreach ($content['whatsapp_templates'] as $t) {
                 $sid = $t['sid'];
                 foreach ($t['languages'] as $l) {
                     $language = $l['language'];
                     $key = $sid . "_" . $language;
-
-//                    $templates[$key] =
+                    $templates[$key] = array_merge($t, $l);
                 }
             }
-
-
-            return $response->getContent();
         } else {
             $this->emError("Unable to fetch templates", $response->getStatusCode(), $response->__toString());
-            return false;
         }
+        $this->setProjectSetting('templates', $templates);
+        return $templates;
     }
 
 
+    /**
+     * Get the cached templates and fetch if empty
+     * @return array
+     */
+    public function getTemplates() {
+        $templates = $this->getProjectSetting('templates');
+        if (empty($templates)) {
+            // Refresh local template store
+            $templates = $this->cacheWhatsAppTemplates();
+        }
+        return $templates;
+    }
+
+    /**
+     *
+     */
+    public function getCallbackUrl() {
+        # Callback URL for delivery updates
+        $callbackUrl = $this->getUrl('pages/statusCallback.php', true, true);
+        $callback_override = $this->getProjectSetting('callback-override');
+        if (!empty($callback_override)) $callbackUrl = str_replace(APP_PATH_WEBROOT_FULL, $callback_override, $callbackUrl);
+        $this->emDebug("Callback url: " . $callbackUrl);
+        return $callbackUrl;
+    }
+
+    private function replaceNbsp ($string, $replacement = '') {
+        $entities = htmlentities($string, null, 'UTF-8');
+        $clean = str_replace("&nbsp; ", $replacement, $entities);
+        $string = html_entity_decode($clean);
+        return $string;
+    }
 
 }
