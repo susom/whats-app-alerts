@@ -19,12 +19,18 @@
             "name": "Ryan Valentine",
             "email": "rval@stanford.edu",
             "institution": "Stanford University"
+        },
+        {
+            "name": "Jordan Schultz",
+            "email": "jmschult@stanford.edu",
+            "institution": "Stanford University"
         }
 
     ],
 
 	"permissions": [
-		"redcap_email"
+		"redcap_email",
+        "redcap_every_page_top"
 	],
 
 	"enable-every-page-hooks-on-system-pages": false,

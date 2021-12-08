@@ -23,6 +23,18 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
 		// Other code to run when object is instantiated
 	}
 
+    public function redcap_every_page_top($project_id=null){
+        if (PAGE == 'AlertsController:setup')
+        {
+            $this->override_alerts();
+        }
+    }
+
+    public function override_alerts() {
+        $jsFilePath = $this->getUrl('js/override.js'); //Override js file
+        print "<script type='module' src=$jsFilePath></script>"; //inject both js and css style
+        print "<style> .inv {position: absolute !important; top: -9999px !important; left: -9999px !important; } </style>";
+    }
 
     public function old_redcap_email( $to, $from, $subject, $message, $cc, $bcc, $fromName, $attachments ) {
 
