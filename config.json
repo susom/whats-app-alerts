@@ -24,7 +24,9 @@
     ],
 
 	"permissions": [
-		"redcap_email"
+		"redcap_email",
+        "redcap_module_system_enable",
+        "redcap_every_page_top"
 	],
 
 	"enable-every-page-hooks-on-system-pages": false,
@@ -34,7 +36,7 @@
             {
                 "name": "What's App",
                 "icon": "fab fa-whatsapp",
-                "url": "pgaes/info.php",
+                "url": "pages/info.php",
                 "show-header-and-footer": true
             },
             {
@@ -42,7 +44,14 @@
                 "icon": "fab fa-whatsapp",
                 "url": "pages/templates.php",
                 "show-header-and-footer": true
+            },
+            {
+                "name": "What's App Messages",
+                "icon": "fab fa-whatsapp",
+                "url": "pages/messages.php",
+                "show-header-and-footer": true
             }
+
 
 
         ],

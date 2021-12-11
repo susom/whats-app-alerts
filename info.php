@@ -10,8 +10,8 @@ namespace Stanford\WhatsAppAlerts;
 # Get all logs
 $fields = [
     "log_id",
-    // "trigger",
-    "trigger_id",
+    "source",
+    "source_id",
     "timestamp",
     "record",
     "number",

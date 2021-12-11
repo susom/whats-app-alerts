@@ -2,4 +2,5 @@
 namespace Stanford\WhatsAppAlerts;
 /** @var WhatsAppAlerts $module */
 
-$module->updateLogStatusCallback();
+$wam = new WhatsAppMessage($module);
+$wam->updateLogStatusCallback();
