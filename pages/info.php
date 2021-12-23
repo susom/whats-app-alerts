@@ -7,6 +7,11 @@ namespace Stanford\WhatsAppAlerts;
 <script type="text/javascript" src="https://cdn.datatables.net/v/bs4/dt-1.10.23/b-1.6.5/b-colvis-1.6.5/b-html5-1.6.5/b-print-1.6.5/r-2.2.7/rg-1.1.2/sl-1.3.1/datatables.min.js"></script>
 <?php
 
+echo "<pre>Inbound Url:\n" . $module->getInboundUrl() . "</pre>";
+
+exit();
+
+
 # Get all logs
 $fields = [
     "log_id",

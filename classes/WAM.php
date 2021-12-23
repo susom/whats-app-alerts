@@ -1,17 +1,25 @@
 <?php
 
-namespace Stanford\WhatsAppAlerts\Entity;
+namespace Stanford\WhatsAppAlerts;
 
 use REDCapEntity\Entity;
 use REDCapEntity\EntityFactory;
+use \Exception;
 
-class Message extends Entity
+class WAM extends Entity
 {
 
+    /**
+     * @throws Exception
+     */
     function __construct(\REDCapEntity\EntityFactory $factory, $entity_type, $id = null)
     {
         parent::__construct($factory, $entity_type, $id);
     }
+
+
+
+
 
     // function validateProperty($key, $value)
    //  {

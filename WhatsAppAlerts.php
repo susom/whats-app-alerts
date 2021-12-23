@@ -13,11 +13,16 @@ use REDCapEntity\EntityFactory;
 
 require_once("classes/Template.php");
 require_once("classes/WhatsAppMessage.php");
-require_once("classes/MessageLogger.php");
 
 class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
 
     use emLoggerTrait;
+
+    private $account_sid;
+    private $token;
+    private $from_number;
+    private $settings;
+    private $settings_loaded;
 
     function redcap_module_system_enable($version) {
         // Create the Entity when the module is activated if it doesn't already exist
@@ -55,12 +60,16 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
             'label_plural' => 'WhatsApp Messages',
             'icon' => 'email',
             'class' => [
-                'name' => 'Stanford\WhatsAppAlerts\Entity\Message',
-                'path' => 'classes/entity/Message.php',
+                'name' => 'Stanford\WhatsAppAlerts\WAM',
+                'path' => 'classes/WAM.php',
             ],
             'properties' => [
-                'sid' => [
-                    'name' => 'SID',
+                'message_sid' => [
+                    'name' => 'Message SID',
+                    'type' => 'text',
+                ],
+                'template_id' => [
+                    'name' => 'Template ID',
                     'type' => 'text',
                 ],
                 'template' => [
@@ -79,12 +88,8 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                     'name' => 'Source ID',
                     'type' => 'text',
                 ],
-                'record' => [
-                    'name' => 'Record',
-                    'type' => 'text',
-                ],
-                'instance' => [
-                    'name' => 'Instance',
+                'record_id' => [
+                    'name' => 'Record Id',
                     'type' => 'text',
                 ],
                 'event_id' => [
@@ -93,6 +98,10 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                 ],
                 'event_name' => [
                     'name' => 'Event Name',
+                    'type' => 'text',
+                ],
+                'instance' => [
+                    'name' => 'Instance',
                     'type' => 'text',
                 ],
                 'to_number' => [
@@ -113,6 +122,11 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                     'type' => 'date',
                     // 'default' => 'NULL',
                 ],
+                'date_received' => [
+                    'name' => 'Received',
+                    'type' => 'date',
+                    // 'default' => 'NULL',
+                ],
                 'date_read' => [
                     'name' => 'Read',
                     'type' => 'date',
@@ -122,6 +136,10 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                     'name' => 'Error',
                     'type' => 'date',
                     // 'default' => 'NULL',
+                ],
+                'date_redelivered' => [
+                    'name' => 'Redelivered',
+                    'type' => 'date',
                 ],
                 'error' => [
                     'name' => 'Error#',
@@ -162,23 +180,25 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
     }
 
 
+    /**
+     * Generic REDCap Email Hook
+     */
 	public function redcap_email( $to, $from, $subject, $message, $cc, $bcc, $fromName, $attachments ) {
+        # Determine if this outbound email is intended to create a WhatsApp Message
+        if (!$config = $this->parseEmailForWhatsAppMessage($message)) return true;
 
         try {
-            # Determine if this email is intended for WhatsApp
+            # It's Whats App Time
             $wam = new WhatsAppMessage($this);
 
-            # Stop processing - this is not a valid what's app message
-            if (! $wam->parseEmail($message)) {
-                $this->emDebug("Email message is not a what's app template - deliver email normally");
-                return true;
-            }
+            # Try to populate the wam from the message config
+            $wam->loadByConfig($config);
 
             # Load Twilio settings
-            $wam->setSid($this->getProjectSetting('sid'));
+            $wam->setAccountSid($this->getProjectSetting('account-sid'));
             $wam->setToken($this->getProjectSetting('token'));
             $wam->setFromNumber($this->getProjectSetting('from-number'));
-            $wam->setCallbackUrl($this->getCallbackUrl());
+            $wam->setCallbackUrl($this->getInboundUrl());
 
             # Ensure we have a valid configuration
             if (! $wam->configurationValid()) {
@@ -187,162 +207,349 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
             }
 
             # Send message
-            $wam->sendMessage();
-
-
-            # See if logging message status has been requested
-            // $log_field = $wam->getLogField();
-            // $log_event_id = $wam->getLogEventId();
-            // if (!empty($log_field) && !empty($log_event_id)) {
-            //     // Default an empty log_event_name to the current event of the alert
-            //     $this->updateAlertLogField($wam->getProjectId(),$wam->getRecordId(),$log_field,$log_event_id,$status);
-            // }
-
-            // Debug issues...
-            // if ($trans->status !== "queued") {
-            //     REDCap::logEvent("Error sending What's App message", $status,"",$wam->getRecordId(), null, $wam->getProjectId());
-            //     $msg = "Error with transmission: " . $status;
-            //     $this->emDebug($msg);
-            // }
+            if ($wam->sendMessage()) {
+                $wam->setDateSent(strtotime('now'));
+                $wam->logNewMessage();
+            } else {
+                $this->emError("Something went wrong sending message");
+            }
         } catch (Exception $e) {
-            $this->emDebug("Caught Exception: " . $e->getMessage());
+            $this->emError("Caught Exception: " . $e->getMessage());
         }
 
-        // Prevent actual email
+        // Prevent actual email since this was a What's App attempt
         return false;
 	}
 
+    // TODO: Cleanup arguments ofr this function to be more elegant...
+    public function sendIcebreakerMessage($wam) {
+        try {
+            $message_id = $wam->entity->getId();
+            $record_id = $wam->getRecordId();
+            $to_number = $wam->getToNumber();
+            // $this->emDebug($wam);
+
+            $this->emDebug("Sending Icebreaker based on failed callback from $record_id");
+            $icebreaker_template  = $this->getProjectSetting('icebreaker-template-id');
+            $icebreaker_variables = $this->getProjectSetting('icebreaker-variables');
+            $this->emDebug("Loaded variables for icebreaker", $icebreaker_variables);
+
+            // Substitute variables with context
+            if (!empty($icebreaker_variables)) {
+                $piped_vars = \Piping::replaceVariablesInLabel($icebreaker_variables, $record_id,
+                    null, 1, null, false,
+                    $this->getProjectId(), false
+                );
+                $this->emDebug("After Piping", $piped_vars);
+                $variables = empty($icebreaker_variables) ? [] : json_decode($piped_vars, true);
+                // $this->emDebug("As an array", $variables);
+            } else {
+                $variables = [];
+            }
+
+            $wam2 = new WhatsAppMessage($this);
+            // Create a config object which will tell the WAM class to send a message
+            $config = [
+                "type" => "whatsapp",
+                "template_id" => $icebreaker_template,
+                "variables" => $variables,
+                "number" => $to_number,
+                "context" => [
+                    "record_id" => $record_id
+                ],
+                "REDCap Message" => "Triggered by failed message " . $message_id
+            ];
+
+            $this->emDebug("Config",$config);
+            if($wam2->loadByConfig($config)) {
+                # Load Twilio settings
+                $wam2->setAccountSid($this->getProjectSetting('account-sid'));
+                $wam2->setToken($this->getProjectSetting('token'));
+                $wam2->setFromNumber($this->getProjectSetting('from-number'));
+                $wam2->setCallbackUrl($this->getInboundUrl());
+
+                # Ensure we have a valid configuration
+                if (! $wam2->configurationValid()) {
+                    $this->emError("configurationValid failed due to errors", $wam2->getErrors());
+                    return false;
+                }
+
+                # Send message
+                if ($wam2->sendMessage()) {
+                    $wam->setDateSent(strtotime('now'));
+                    $wam->logNewMessage();
+                } else {
+                    $this->emError("Something went wrong sending message");
+                };
+            } else {
+                $this->emError("Unable to loadByConfig");
+            };
+        } catch (\Exception $e) {
+            $this->emError("Unable to load icebreaker template: " . $e->getMessage());
+        }
+    }
+
+
+    public function sendUndeliveredMessages($entities) {
+        $account_sid = $this->getProjectSetting('account-sid');
+        $token = $this->getProjectSetting('token');
+        $callbackUrl = $this->getInboundUrl();
+
+        // Each entity is an undelivered message
+        foreach ($entities as $entity) {
+            /** @var Entity $entity */
+
+            // Retry Delivery
+            $id = $entity->getId();
+            $this->emDebug("Retrying entity " . $id);
+
+            // Original message to be redelivered
+            $wam = new WhatsAppMessage($this);
+            $wam->loadFromEntity($entity);
+
+            // Determine message age
+            $original_message = $wam->getMessage();
+            $age = $wam->getMessageAge();
+            $new_message = "_Originally scheduled $age ago (#$id)_ \n\n" . $original_message;
+
+
+            $config = [
+                "number" => $wam->getToNumber(),
+                "body" => $new_message,
+                "context" => [
+                    "source"    => "Undelivered Message",
+                    "source_id" => $id,
+                    "record_id" => $wam->getRecordId()
+                ],
+                "REDCap Message" => "This is a redelivery of message #$id - " . $wam->getMessageSid()
+            ];
+            $this->emDebug("Config",$config);
+
+            // New message that will be used for redelivery
+            $wam2 = new WhatsAppMessage($this);
+            if($wam2->loadByConfig($config)) {
+                # Load Twilio settings
+                $wam2->setAccountSid($this->getAccountSid());
+                $wam2->setToken($this->getToken());
+                $wam2->setFromNumber($this->getFromNumber());
+                $wam2->setCallbackUrl($this->getInboundUrl());
+
+                # Ensure we have a valid configuration
+                if (! $wam2->configurationValid()) {
+                    $this->emError("configurationValid failed due to errors", $wam2->getErrors());
+                    return false;
+                }
+
+                # Send message
+                if ($wam2->sendMessage()) {
+
+                    // Save new message to log
+                    $wam2->setDateSent(strtotime('now'));
+                    $id2 = $wam2->logNewMessage();
+
+                    // Update original message
+                    $update = [
+                        "date_redelivered" => strtotime('now'),
+                        "status" => "redelivered"
+                    ];
+                    $wam->appendRaw(array_merge($update,
+                            [
+                                "REDCap Message" => "Redelivered as message #$id2 after delay of $age",
+                            ])
+                    );
+                    $update['raw'] = $wam->getRaw();
+                    $this->emDebug("About to set data to ", $update);
+                    if (!$entity->setData($update)) {
+                        $this->emError("An error occurred setting the data:", $update);
+                    };
+                    $id = $entity->save();
+                    if ($id === false) {
+                        $this->emError("An error occurred saving the data:", $update);
+                    } else {
+                        $this->emDebug("Message #$id - Resent and updated");
+                    }
+
+                } else {
+                    $this->emError("Something went wrong sending message");
+                };
+            } else {
+                $this->emError("Unable to loadByConfig");
+            };
+
+        }
+
+    }
+
+
+    private function loadSettings() {
+        $this->account_sid = $this->getProjectSetting('account-sid');
+        $this->token = $this->getProjectSetting('token');
+        $this->from_number = $this->getProjectSetting('from-number');
+        $this->settings_loaded = true;
+    }
+
+    public function getAccountSid() {
+        if (! $this->settings_loaded) $this->loadSettings();
+        return $this->account_sid;
+    }
+
+    public function getToken() {
+        if (! $this->settings_loaded) $this->loadSettings();
+        return $this->token;
+    }
+
+    public function getFromNumber()
+    {
+        if (! $this->settings_loaded) $this->loadSettings();
+        return $this->from_number;
+    }
+
+    public function getInboundUrl() {
+        $url = $this->getUrl('pages/inbound.php', true, true);
+        return $this->checkDevUrl($url);
+    }
 
 
     /**
-     * The EM supports writing the current message status to a field in the project defined with an field_name and
-     * event_name.  This is not always possible depending on the context and inputs provided to the @WHATSAPP tag
-     * @param $project_id
-     * @param $record_id
-     * @param $log_field
-     * @param $log_event_id
-     * @param $status
-     * @return bool
-     * @throws \Exception
+     * Fix callback/internal urls for dev purposes, e.g. NGROK.
+     * @return string
      */
-	public function updateAlertLogField($project_id, $record_id, $log_field, $log_event_id, $status) {
+    public function checkDevUrl($url) {
+        $overrideUrl = $this->getProjectSetting('override-url');
+        if (!empty($overrideUrl)) {
+            // Make sure callback_override ends with a slash
+            if (! str_ends_with($overrideUrl,'/')) $overrideUrl .= "/";
+            // Substitute
+            $new_url = str_replace(APP_PATH_WEBROOT_FULL, $overrideUrl, $url);
+            // $this->emDebug("Overriding url $url with $new_url");
+        } else {
+            $new_url = $url;
+        }
+        return strval($new_url);
+    }
 
-	    # Verify required inputs
-	    if (empty($project_id) || empty($record_id) || empty($log_field) || empty($log_event_id)) {
-	        // Missing required fields - abort
-            $this->emDebug("Unable to log to alert field: " . func_get_args());
+
+    /**
+     * Parse message from email body for What's App config
+     * @param $message
+     * @return bool     false if not a what's app message
+     */
+    private function parseEmailForWhatsAppMessage($message)
+    {
+        /*
+             {
+                "type": "whatsapp",
+                "template_id": "ACe3ab1c8d7222aedd52dc8fff05d1feb9_en",
+                "template": "messages_awaiting",
+                "language": "en",
+                "variables": [ "[event_1_arm_1][baseline]", "Hello" ],
+                "body": "blank if free text, otherwise will be calculated based on template and variables",
+                "number": "[event_1_arm_1][whats_app_number]",
+                "log_field": "field_name",
+                "log_event_name": "log_event_name",
+                "context": {
+                    "project_id": "[project-id]",
+                    "event_name": "[event-name]",
+                    "record_id": "[record-id]",
+                    "instance": "[current-instance]"
+                }
+            }
+        */
+
+        // Try to parse a WhatsApp message from the Email body
+        $config = self::parseHtmlishJson($message);
+
+        // Stop processing - this is not a valid what's app message
+        if ($config === FALSE || !isset($config['type']) || $config['type'] != "whatsapp") {
             return false;
         }
 
-        # Verify valid inputs
-        global $Proj;
-        $logProj = ($Proj->project_id ?? NULL == $project_id) ? $Proj : new Project($project_id);
-        $error = "";
-        $field_metadata = $logProj->metadata[$log_field] ?? null;
-        $form_name = $field_metadata['form_name'] ?? null;
-        if (empty($field_metadata)) {
-            $error = "log_field $log_field is not present";
-        } elseif ($field_metadata['element_type'] !== "text") {
-            $error = "log field $log_field must be of type text";
-        } elseif (empty($logProj->eventsForms[$log_event_id])) {
-            $error = "log_event_id $log_event_id is not valid in project $project_id";
-        } elseif (!in_array($form_name, $logProj->eventsForms[$log_event_id])) {
-            $error = "form $form_name is not enabled in event $log_event_id";
-        }
-        if (!empty($error)) {
-            REDCap::logEvent("What's App Unable to update Log Field: $", $error, "", $record_id, null, $project_id);
-            $this->emDebug($error);
-            return false;
-        }
+        return $config;
+    }
 
-        # save update
-        $payload = [
-            'project_id' => $project_id,
-            'data' => [
-                $record_id => [
-                    $log_event_id => [
-                        $log_field => $status
-                    ]
-                ]
-            ]
+
+    /** UTILITY FUNCTIONS */
+
+    private static function parseHtmlishJson($input) {
+        $string = self::replaceNbsp($input, "  ");
+        $junk = [
+            "<p>",
+            "<br />",
+            "</p>"
         ];
-        $result = REDCap::saveData($payload);
-        if (!empty($result['errors'])) {
-            $this->emError("Errors saving", $payload, $result);
+        // Remove HTML tags inserted by UI
+        $string = str_replace($junk, '', $string);
+
+        // See if it is valid json
+        list($success, $result) = self::jsonToObject($string);
+
+        if ($success) {
+            return $result;
+        } else {
             return false;
         }
-        $this->emDebug("Just updated $log_field in event $log_event_id with $status");
-        return true;
     }
 
+    private static function jsonToObject($string, $assoc = true)
+    {
+        // decode the JSON data
+        $result = json_decode($string, $assoc);
 
+        // switch and check possible JSON errors
+        switch (json_last_error()) {
+            case JSON_ERROR_NONE:
+                $error = ''; // JSON is valid // No error has occurred
+                break;
+            case JSON_ERROR_DEPTH:
+                $error = 'The maximum stack depth has been exceeded.';
+                break;
+            case JSON_ERROR_STATE_MISMATCH:
+                $error = 'Invalid or malformed JSON.';
+                break;
+            case JSON_ERROR_CTRL_CHAR:
+                $error = 'Control character error, possibly incorrectly encoded.';
+                break;
+            case JSON_ERROR_SYNTAX:
+                $error = 'Syntax error, malformed JSON.';
+                break;
+            // PHP >= 5.3.3
+            case JSON_ERROR_UTF8:
+                $error = 'Malformed UTF-8 characters, possibly incorrectly encoded.';
+                break;
+            // PHP >= 5.5.0
+            case JSON_ERROR_RECURSION:
+                $error = 'One or more recursive references in the value to be encoded.';
+                break;
+            // PHP >= 5.5.0
+            case JSON_ERROR_INF_OR_NAN:
+                $error = 'One or more NAN or INF values in the value to be encoded.';
+                break;
+            case JSON_ERROR_UNSUPPORTED_TYPE:
+                $error = 'A value of a type that cannot be encoded was given.';
+                break;
+            default:
+                $error = 'Unknown JSON error occured.';
+                break;
+        }
 
-
-
-    //
-    // /**
-    //  * Pull down the Twilio What's App templates for the project and store them in
-    //  * an em setting variable.  We also expand the templates to include one per language
-    //  * so as to simplify selection.  The key for a cached template is:
-    //  * template_id + '_' + language
-    //  * @return array
-    //  * @throws \Twilio\Exceptions\ConfigurationException
-    //  */
-    // public function cacheWhatsAppTemplates() {
-    //     $sid = $this->getProjectSetting('sid');
-    //     $token = $this->getProjectSetting('token');
-    //
-    //     $client = new \Twilio\Rest\Client($sid, $token);
-    //     $response = $client->request(
-    //         'GET',
-    //         'https://messaging.twilio.com/v1/Channels/WhatsApp/Templates'
-    //     );
-    //
-    //     $templates = [];
-    //     if ($response->ok()) {
-    //         // Templates is an array with key 'whatsapp_templates'
-    //         $content = $response->getContent();
-    //
-    //         foreach ($content['whatsapp_templates'] as $t) {
-    //             $sid = $t['sid'];
-    //             foreach ($t['languages'] as $l) {
-    //                 $language = $l['language'];
-    //                 $key = $sid . "_" . $language;
-    //                 $templates[$key] = array_merge($t, $l);
-    //             }
-    //         }
-    //     } else {
-    //         $this->emError("Unable to fetch templates", $response->getStatusCode(), $response->__toString());
-    //     }
-    //     $this->setProjectSetting('templates', $templates);
-    //     return $templates;
-    // }
-
-
-    // /**
-    //  * Get the cached templates and fetch if empty
-    //  * @return array
-    //  */
-    // public function getTemplates() {
-    //     $templates = $this->getProjectSetting('templates');
-    //     if (empty($templates)) {
-    //         // Refresh local template store
-    //         $templates = $this->cacheWhatsAppTemplates();
-    //     }
-    //     return $templates;
-    // }
+        if ($error !== '') {
+            return array(false, $error);
+        } else {
+            return array(true, $result);
+        }
+    }
 
     /**
-     *
+     * @param $string
+     * @param $replacement
+     * @return array|string|string[]
      */
-    public function getCallbackUrl() {
-        # Callback URL for delivery updates
-        $callbackUrl = $this->getUrl('pages/statusCallback.php', true, true);
-        $callback_override = $this->getProjectSetting('callback-override');
-        if (!empty($callback_override)) $callbackUrl = str_replace(APP_PATH_WEBROOT_FULL, $callback_override, $callbackUrl);
-        $this->emDebug("Callback url: " . $callbackUrl);
-        return $callbackUrl;
+    private static function replaceNbsp ($string, $replacement = '  ') {
+        $funky="|!|";
+        $entities = htmlentities($string, ENT_NOQUOTES, 'UTF-8');
+        $subbed = str_replace("&nbsp; ", $funky, $entities);
+        $decoded = html_entity_decode($subbed);
+        return str_replace($funky, $replacement, $decoded);
     }
-
 
 }
