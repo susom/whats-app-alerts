@@ -10,22 +10,26 @@ use \Exception;
  * @property WhatsAppAlerts $module
  * @property Entity $entity
  */
-class WhatsAppMessage
+class WhatsAppHelper
 {
+
     const ICEBREAKER_ERROR = 63016;
 
-    private $module;
+    private $module;        // The parent EM
+
+    private $template_id;
+    private $template;
+    private $message;       // Finished message formed from variables
+
+    private $messageContext;
+    // private $source;
+    // private $source_id;
+    // private $record_id;
+    // private $event_id;
+    // private $event_name;
+    // private $instance;
 
     private $message_sid;   // Message SID
-    private $template;
-    private $template_id;
-    private $message;       // Finished message formed from variables
-    private $source;
-    private $source_id;
-    private $record_id;
-    private $event_id;
-    private $event_name;
-    private $instance;
     private $to_number;
     private $from_number;
     private $date_sent;
@@ -60,7 +64,14 @@ class WhatsAppMessage
         $this->module    = $module;
     }
 
-    public function loadByConfig($config) {
+    // TODO: move into constructor as optional parameter
+
+    /**
+     * @param $config
+     * @throws Exception
+     */
+    public function createOutboundMessage($config) {
+        // Load the message configuration - which should look something like the example below:
         /*
              [
                 "type" => "whatsapp",
@@ -82,35 +93,59 @@ class WhatsAppMessage
         */
 
         // Set context
-        $context = empty($config['context']) ? [] : $config['context'];
-        $this->setContext($context);
+        $context              = empty($config['context']) ? [] : $config['context'];
+        $this->messageContext = new MessageContext($context);
 
-        // Set template
-        $this->setTemplate($config['template'] ?? '');
-        $this->setTemplateId($config['template_id'] ?? '');
+        // $this->source     = $mc->getSource();
+        // $this->source_id  = $mc->getSourceId();
+        // $this->project_id = $mc->getProjectId();
+        // $this->record_id  = $mc->getRecordId();
+        // $this->event_id   = $mc->getEventId();
+        // $this->event_name = $mc->getEventName();
+        // $this->instance   = $mc->getInstance();
 
-        $this->setToNumber($config['number']);
+        // $this->setContext($context);
 
-        $this->appendRaw($config);
+        // Parse Message Config
+
+
+
+        // $this->setTemplate($config['template'] ?? '');
+        // $this->setTemplateId($config['template_id'] ?? '');
 
         $variables = $config['variables'] ?? [];
 
-        // Determine if message uses a template or is free text and set the message body
-        if (!empty($this->getTemplateId())) {
+        // Determine if message uses a template or is free text
+        // $template = $config['template'];
+        if ($template_id = $config['template_id'] ?? false) {
+
+        // if (!empty($this->getTemplateId())) {
             // We are using a template -- lets load the template
-            $t = new Template($this->module, $this->getTemplateId());
-            $message = $t->buildMessage($variables);
-            $this->setMessage($message);
-            $this->template = $t->getTemplateName();
+            $t = new Template($this->module, $template_id);
+
+            // Let's create the message
+            $message = $t->getMessageFromVariables($variables);
+            $template_name = $t->getTemplateName();
+            // $this->setMessage($t->getMessageFromVariables($variables));
+
+            // ??
+            // $this->template = $t->getTemplateName();
         } else {
+            // No template - lets build message from raw body
             $body = html_entity_decode($config['body']);
-            $this->module->emDebug($config['body'], $body);
-            $this->message = strip_tags($body,'');
+            $message = strip_tags($body, 'a');
+            // $this->message = strip_tags($body,'');
+            $this->module->emDebug("Decoding body", $config['body'], $body, $message);
         }
-        return true;
+
+        $this->setMessage($message);
+        $this->setToNumber($config['number']);
+        $this->appendRaw($config);
     }
 
 
+
+    // TODO: Seems like the wrong place
     public function loadFromEntity($entity) {
         $this->entity = $entity;
         $data = $entity->getData();
@@ -138,7 +173,7 @@ class WhatsAppMessage
 
         $this->trans = $client->messages->create("whatsapp:" . $this->to_number,
             [
-                "from" => "whatsapp:" . $this->from_number,
+                "from" => "whatsapp:" . $this->getFromNumber(),
                 "body" => $this->getMessage(),
                 "statusCallback" => $this->callback_url
             ]
@@ -219,8 +254,6 @@ class WhatsAppMessage
     // public function sendIcebreakerMessage($record_id) {
     //
     // }
-
-
 
     // /**
     //  * Twilio calls a callback URL.  This function takes the results of that callback and uses them to update entity
@@ -347,6 +380,7 @@ class WhatsAppMessage
             [ErrorCode] => 63016,
             [EventType] => "UNDELIVERED"
          */
+
         /* EXAMPLE REPLY:
             [NumMedia] => 0
             [ProfileName] => Andy Martin
@@ -361,17 +395,18 @@ class WhatsAppMessage
             [ApiVersion] => 2010-04-01
          */
 
-        $this->message_sid = $_POST['MessageSid'] ?? null;
-        $this->status      = $_POST['MessageStatus']  ?? '';
-        $this->error       = $_POST['ErrorCode'] ?? '';
+        $this->message_sid = $_POST['MessageSid']       ?? null;
+        $this->status      = $_POST['MessageStatus']    ?? '';
+        $this->error       = $_POST['ErrorCode']        ?? '';
 
         if (empty($this->message_sid)) {
             $this->module->emError("Unable to parse inbound message SID:", $_POST);
             return false;
         }
 
-        // See if there is an existing SID for this message
         usleep(100);    // Added a slight delay to ensure original outgoing message is logged
+
+        // See if there is an existing SID for this message
         $factory = new EntityFactory();
         $results = $factory->query('whats_app_message')
             ->condition('message_sid', $this->message_sid)
@@ -426,7 +461,8 @@ class WhatsAppMessage
         }
 
         # Set the context for the new log entry
-        $this->setContext();
+        // $this->setContext();
+        $this->messageContext = new MessageContext();
         // $this->module->emDebug("Set context!");
 
         # Log message
@@ -528,8 +564,11 @@ class WhatsAppMessage
                     }
                 }
                 break;
+            case "failed":
+                $this->module->emDebug("Failed Delivery", $_POST);
+                break;
             default:
-                $this->module->emError("Unhandled callback status: $this->status");
+                $this->module->emError("Unhandled callback status: $this->status", $_POST);
         }
         if (!empty($this->error)) $payload['date_error'] = strtotime('now');
 
@@ -684,143 +723,143 @@ class WhatsAppMessage
     }
 
 
-
     /**
      * Because the redcap_email hook doesn't have any context (e.g. record, project, etc) it can sometimes be hard
      * to know if any context applies.  Generally you can provide details via piping in the subject, but only to a
      * certain extent.  For example, a scheduled ASI email will have a record, but no event / project context
      *
-     * Replies on the following being preset:
+     * This module sets:
+     * source, source_id, project_id, record_id, event_id, instance, and event_name
      *
      * @param $context array
+     * @throws Exception
      */
-    private function setContext($context = []) {
-        /*
-            [file] => /var/www/html/redcap_v10.8.2/DataEntry/index.php
-            [line] => 345
-            [function] => saveRecord
-            [class] => DataEntry
-            [type] => ::
-            [args] => Array
-                (
-                    [0] => 21
-                    [1] => 1
-                    [2] =>
-                    [3] =>
-                    [4] =>
-                    [5] => 1
-                    [6] =>
-                )
-
-
-        // From an immediate ASI
-        scheduleParticipantInvitation($survey_id, $event_id, $record)
-
-            [file] => /var/www/html/redcap_v10.8.2/Classes/SurveyScheduler.php
-            [line] => 1914
-            [function] => scheduleParticipantInvitation
-            [class] => SurveyScheduler
-            [type] => ->
-            [args] => Array
-                (
-                    [0] => 11
-                    [1] => 53
-                    [2] => 21
-                )
-
-         */
-
-        # Get Context From Backtrace
-        $bt = debug_backtrace(0);
-        // $this->emDebug($bt);
-        foreach ($bt as $t) {
-            $function = $t['function'] ?? FALSE;
-            $class = $t['class'] ?? FALSE;
-            $args = preg_replace(['/\'/', '/"/', '/\s+/', '/_{6}/'], ['','','',''], $t['args']);
-
-            // If email is being sent from an Alert - get context from debug_backtrace using function:
-            // sendNotification($alert_id, $project_id, $record, $event_id, $instrument, $instance=1, $data=array())
-            if ($function == 'sendNotification' && $class == 'Alerts') {
-                $this->source    = "Alert";
-                $this->source_id = $args[0];
-                $this->project_id = $args[1];
-                $this->record_id  = $args[2];
-                $this->event_id   = $args[3];
-                $this->instance   = $args[5];
-                break;
-            }
-
-            if ($function == 'scheduleParticipantInvitation' && $class == 'SurveyScheduler') {
-                // scheduleParticipantInvitation($survey_id, $event_id, $record)
-                $this->source    = "ASI (Immediate)";
-                $this->source_id = $args[0];
-                $this->event_id   = $args[1];
-                $this->record_id  = $args[2];
-                break;
-            }
-
-            if ($function == 'SurveyInvitationEmailer' && $class == 'Jobs') {
-                $this->source    = "ASI (Delayed)";
-                $this->source_id = "";
-                // Unable to get project_id in this case
-                break;
-            }
-        }
-
-        if (!empty($context['source'])) $this->source = $context['source'];
-        if (!empty($context['source_id'])) $this->source_id = $context['source_id'];
-
-        # Try to get project_id from EM if not already set
-        if (empty($this->project_id)) {
-            // $this->module->emDebug("Getting project_id context from EM");
-            $this->project_id = $this->module->getProjectId();
-        }
-
-        # OVERRIDE DEFAULT VALUES WITH SPECIFIED CONTEXT IF PRESENT
-        if (!empty($context['event_name'])) {
-            // $this->module->emDebug("Setting event_name from context", $this->event_name, $context['event_name']);
-            $this->event_name = $context['event_name'];
-        }
-
-        if (!empty($context['event_id'])) {
-            // $this->module->emDebug("Setting event_id from context", $this->event_id, $context['event_id']);
-            $this->event_id = $context['event_id'];
-        }
-
-        if (!empty($context['record_id'])) {
-            // $this->module->emDebug("Setting record_id from context", $this->record_id, $context['record_id']);
-            $this->record_id = $context['record_id'];
-        }
-
-        if (!empty($context['project_id'])) {
-            // $this->module->emDebug("Setting project_id from context", $this->project_id, $context['project_id']);
-            $this->project_id = $context['project_id'];
-        }
-
-        if (!empty($context['instance'])) {
-            // $this->module->emDebug("Setting instance from context", $this->instance, $context['instance']);
-            $this->instance = $context['instance'];
-        }
-
-        # Set event_name from event_id and visa vera
-        if (!empty($this->project_id)) {
-
-            if (!empty($this->event_id) && empty($this->event_name)) {
-                // $this->module->emDebug("Setting event_name from event_id " . $this->event_id);
-                $this->event_name = \REDCap::getEventNames(true, false, $this->event_id);
-            }
-
-            // This method got complicated to make it work when not in project context from cron
-            if (!empty($this->event_name) && empty($this->event_id)) {
-                global $Proj;
-                $thisProj = (!empty($Proj->project_id) && $this->project_id == $Proj->project_id) ? $Proj : new \Project($this->project_id);
-                // $this->module->emDebug("Setting event_id from event_name " . $this->event_name);
-                //$this->event_id = \REDCap::getEventIdFromUniqueEvent($this->event_name);
-                $this->event_id = $thisProj->getEventIdUsingUniqueEventName($this->event_name);
-            }
-        }
-    }
-
+    // private function setContext($context = []) {
+    //     /*
+    //         [file] => /var/www/html/redcap_v10.8.2/DataEntry/index.php
+    //         [line] => 345
+    //         [function] => saveRecord
+    //         [class] => DataEntry
+    //         [type] => ::
+    //         [args] => Array
+    //             (
+    //                 [0] => 21
+    //                 [1] => 1
+    //                 [2] =>
+    //                 [3] =>
+    //                 [4] =>
+    //                 [5] => 1
+    //                 [6] =>
+    //             )
+    //
+    //
+    //     // From an immediate ASI
+    //     scheduleParticipantInvitation($survey_id, $event_id, $record)
+    //
+    //         [file] => /var/www/html/redcap_v10.8.2/Classes/SurveyScheduler.php
+    //         [line] => 1914
+    //         [function] => scheduleParticipantInvitation
+    //         [class] => SurveyScheduler
+    //         [type] => ->
+    //         [args] => Array
+    //             (
+    //                 [0] => 11
+    //                 [1] => 53
+    //                 [2] => 21
+    //             )
+    //
+    //      */
+    //
+    //     # Get Context From Backtrace
+    //     $bt = debug_backtrace(0);
+    //     // $this->emDebug($bt);
+    //     foreach ($bt as $t) {
+    //         $function = $t['function'] ?? FALSE;
+    //         $class = $t['class'] ?? FALSE;
+    //         $args = preg_replace(['/\'/', '/"/', '/\s+/', '/_{6}/'], ['','','',''], $t['args']);
+    //
+    //         // If email is being sent from an Alert - get context from debug_backtrace using function:
+    //         // sendNotification($alert_id, $project_id, $record, $event_id, $instrument, $instance=1, $data=array())
+    //         if ($function == 'sendNotification' && $class == 'Alerts') {
+    //             $this->source     = "Alert";
+    //             $this->source_id  = $args[0];
+    //             $this->project_id = $args[1];
+    //             $this->record_id  = $args[2];
+    //             $this->event_id   = $args[3];
+    //             $this->instance   = $args[5];
+    //             break;
+    //         }
+    //
+    //         if ($function == 'scheduleParticipantInvitation' && $class == 'SurveyScheduler') {
+    //             // scheduleParticipantInvitation($survey_id, $event_id, $record)
+    //             $this->source     = "ASI (Immediate)";
+    //             $this->source_id  = $args[0];
+    //             $this->event_id   = $args[1];
+    //             $this->record_id  = $args[2];
+    //             break;
+    //         }
+    //
+    //         if ($function == 'SurveyInvitationEmailer' && $class == 'Jobs') {
+    //             $this->source    = "ASI (Delayed)";
+    //             $this->source_id = "";
+    //             // Unable to get project_id in this case
+    //             break;
+    //         }
+    //     }
+    //
+    //     # Try to get project_id from EM if not already set
+    //     if (empty($this->project_id)) {
+    //         // $this->module->emDebug("Getting project_id context from EM");
+    //         $this->project_id = $this->module->getProjectId();
+    //     }
+    //
+    //     # OVERRIDE DEFAULT VALUES WITH SPECIFIED CONTEXT IF PRESENT
+    //     if (!empty($context['source'])) $this->source = $context['source'];
+    //     if (!empty($context['source_id'])) $this->source_id = $context['source_id'];
+    //
+    //     if (!empty($context['event_name'])) {
+    //         // $this->module->emDebug("Setting event_name from context", $this->event_name, $context['event_name']);
+    //         $this->event_name = $context['event_name'];
+    //     }
+    //
+    //     if (!empty($context['event_id'])) {
+    //         // $this->module->emDebug("Setting event_id from context", $this->event_id, $context['event_id']);
+    //         $this->event_id = $context['event_id'];
+    //     }
+    //
+    //     if (!empty($context['record_id'])) {
+    //         // $this->module->emDebug("Setting record_id from context", $this->record_id, $context['record_id']);
+    //         $this->record_id = $context['record_id'];
+    //     }
+    //
+    //     if (!empty($context['project_id'])) {
+    //         // $this->module->emDebug("Setting project_id from context", $this->project_id, $context['project_id']);
+    //         $this->project_id = $context['project_id'];
+    //     }
+    //
+    //     if (!empty($context['instance'])) {
+    //         // $this->module->emDebug("Setting instance from context", $this->instance, $context['instance']);
+    //         $this->instance = $context['instance'];
+    //     }
+    //
+    //     # Set event_name from event_id and visa vera
+    //     if (!empty($this->project_id)) {
+    //
+    //         if (!empty($this->event_id) && empty($this->event_name)) {
+    //             // $this->module->emDebug("Setting event_name from event_id " . $this->event_id);
+    //             $this->event_name = \REDCap::getEventNames(true, false, $this->event_id);
+    //         }
+    //
+    //         // This method got complicated to make it work when not in project context from cron
+    //         if (!empty($this->event_name) && empty($this->event_id)) {
+    //             global $Proj;
+    //             $thisProj = (!empty($Proj->project_id) && $this->project_id == $Proj->project_id) ? $Proj : new \Project($this->project_id);
+    //             // $this->module->emDebug("Setting event_id from event_name " . $this->event_name);
+    //             //$this->event_id = \REDCap::getEventIdFromUniqueEvent($this->event_name);
+    //             $this->event_id = $thisProj->getEventIdUsingUniqueEventName($this->event_name);
+    //         }
+    //     }
+    // }
 
 
     /** GETTERS AND SETTERS */

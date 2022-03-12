@@ -278,11 +278,12 @@ class Template
      * @throws
      */
     public function __construct($module, $template_id = null) {
+        // Passing in module for logging/etc
         $this->module    = $module;
 
         // Load the template cache
         if (!empty($template_id)) {
-            return $this->getTemplate($template_id);
+            $this->getTemplate($template_id);
         }
     }
 
@@ -353,15 +354,15 @@ class Template
      * Find the requested template and populate the object with it
      * @param $template_id
      * @return bool
-     * @throws \Twilio\Exceptions\ConfigurationException
+     * @throws Exception
      */
     public function getTemplate($template_id) {
         // Make sure we have the templates in this object
-        $this->loadTemplates();
+        $this->loadTemplates(false);
 
         if (empty($this->templates[$template_id])) {
             // Template does not exist
-            throw new Exception("Template $template_id does not exist");
+            throw new Exception("Specified template $template_id does not exist");
         }
 
         $template            = $this->templates[$template_id];
@@ -385,39 +386,32 @@ class Template
 
     /**
      * Construct the actual message from the content and variables
-     * @param $variables
-     * @return array|string|string[]
+     * @param $variables array
+     * @returns string message
      * @throws Exception
      */
-    public function buildMessage($variables) {
-        $variableCount = count($variables);
+    public function getMessageFromVariables($variables) {
+        // Parse the template or raw message for {x} variables
+        $variable_placeholders = self::parseContentVariables($this->content);
 
-        $message = $this->content;
-        $contentVariables = self::parseContentVariables($message);
-        $templateVariableCount = count($contentVariables);
-
-        if ($templateVariableCount != $variableCount) {
+        if (count($variable_placeholders) != count($variables)) {
             throw new Exception ("Template $this->template_id calls for " .
-                $templateVariableCount . " but the message contained " . $variableCount);
+                count($variable_placeholders) . " variables but the message only contained " .
+                count($variables));
         }
 
-        foreach ($contentVariables as $match) {
+        // Substitute variables into placeholders
+        $message = $this->content;
+        foreach ($variable_placeholders as $match) {
             $index = $match['index'];
             $token = $match['token'];
             $value = $variables[$index-1];
             // $this->module->emDebug("Replacing index $index token $token with $value");
             $message = str_replace($token, $value, $message);
         }
-        // $this->module->emDebug("Substitution Complete:", $this->content, $message);
         $this->message = $message;
         return $message;
     }
-
-
-    // public function applyTemplate($template_id) {
-    //     $this->getTemplate($template_id);
-    //
-    // }
 
 
     /**
@@ -450,7 +444,7 @@ class Template
         $this->module->emDebug("As an array", $variables);
 
         // Build the actual message body and return
-        return $this->buildMessage($variables);
+        return $this->getMessageFromVariables($variables);
     }
 
 

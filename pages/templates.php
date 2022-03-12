@@ -6,7 +6,7 @@ namespace Stanford\WhatsAppAlerts;
 use Stanford\WhatsAppAlerts\Template;
 
 $t = new Template($module);
-$r = $t->refreshTemplates();
+$r = $t->refreshTemplates(true);
 
 ?>
 

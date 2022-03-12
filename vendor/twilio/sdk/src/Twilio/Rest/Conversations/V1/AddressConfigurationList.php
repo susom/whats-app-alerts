@@ -7,34 +7,34 @@
  * /       /
  */
 
-namespace Twilio\Rest\Events\V1\Schema;
+namespace Twilio\Rest\Conversations\V1;
 
+use Twilio\Exceptions\TwilioException;
 use Twilio\ListResource;
+use Twilio\Options;
+use Twilio\Serialize;
 use Twilio\Stream;
 use Twilio\Values;
 use Twilio\Version;
 
-/**
- * PLEASE NOTE that this class contains preview products that are subject to change. Use them with caution. If you currently do not have developer preview access, please contact help@twilio.com.
- */
-class VersionList extends ListResource {
+class AddressConfigurationList extends ListResource {
     /**
-     * Construct the VersionList
+     * Construct the AddressConfigurationList
      *
      * @param Version $version Version that contains the resource
-     * @param string $id The unique identifier of the schema.
      */
-    public function __construct(Version $version, string $id) {
+    public function __construct(Version $version) {
         parent::__construct($version);
 
         // Path Solution
-        $this->solution = ['id' => $id, ];
+        $this->solution = [];
 
-        $this->uri = '/Schemas/' . \rawurlencode($id) . '/Versions';
+        $this->uri = '/Configuration/Addresses';
     }
 
     /**
-     * Streams VersionInstance records from the API as a generator stream.
+     * Streams AddressConfigurationInstance records from the API as a generator
+     * stream.
      * This operation lazily loads records as efficiently as possible until the
      * limit
      * is reached.
@@ -60,7 +60,7 @@ class VersionList extends ListResource {
     }
 
     /**
-     * Reads VersionInstance records from the API as a list.
+     * Reads AddressConfigurationInstance records from the API as a list.
      * Unlike stream(), this operation is eager and will load `limit` records into
      * memory before returning.
      *
@@ -72,52 +72,84 @@ class VersionList extends ListResource {
      *                        page_size is defined but a limit is defined, read()
      *                        will attempt to read the limit with the most
      *                        efficient page size, i.e. min(limit, 1000)
-     * @return VersionInstance[] Array of results
+     * @return AddressConfigurationInstance[] Array of results
      */
     public function read(int $limit = null, $pageSize = null): array {
         return \iterator_to_array($this->stream($limit, $pageSize), false);
     }
 
     /**
-     * Retrieve a single page of VersionInstance records from the API.
+     * Retrieve a single page of AddressConfigurationInstance records from the API.
      * Request is executed immediately
      *
      * @param mixed $pageSize Number of records to return, defaults to 50
      * @param string $pageToken PageToken provided by the API
      * @param mixed $pageNumber Page Number, this value is simply for client state
-     * @return VersionPage Page of VersionInstance
+     * @return AddressConfigurationPage Page of AddressConfigurationInstance
      */
-    public function page($pageSize = Values::NONE, string $pageToken = Values::NONE, $pageNumber = Values::NONE): VersionPage {
+    public function page($pageSize = Values::NONE, string $pageToken = Values::NONE, $pageNumber = Values::NONE): AddressConfigurationPage {
         $params = Values::of(['PageToken' => $pageToken, 'Page' => $pageNumber, 'PageSize' => $pageSize, ]);
 
         $response = $this->version->page('GET', $this->uri, $params);
 
-        return new VersionPage($this->version, $response, $this->solution);
+        return new AddressConfigurationPage($this->version, $response, $this->solution);
     }
 
     /**
-     * Retrieve a specific page of VersionInstance records from the API.
+     * Retrieve a specific page of AddressConfigurationInstance records from the
+     * API.
      * Request is executed immediately
      *
      * @param string $targetUrl API-generated URL for the requested results page
-     * @return VersionPage Page of VersionInstance
+     * @return AddressConfigurationPage Page of AddressConfigurationInstance
      */
-    public function getPage(string $targetUrl): VersionPage {
+    public function getPage(string $targetUrl): AddressConfigurationPage {
         $response = $this->version->getDomain()->getClient()->request(
             'GET',
             $targetUrl
         );
 
-        return new VersionPage($this->version, $response, $this->solution);
+        return new AddressConfigurationPage($this->version, $response, $this->solution);
     }
 
     /**
-     * Constructs a VersionContext
+     * Create the AddressConfigurationInstance
      *
-     * @param int $schemaVersion The version of the schema
+     * @param string $type Type of Address.
+     * @param string $address The unique address to be configured.
+     * @param array|Options $options Optional Arguments
+     * @return AddressConfigurationInstance Created AddressConfigurationInstance
+     * @throws TwilioException When an HTTP error occurs.
      */
-    public function getContext(int $schemaVersion): VersionContext {
-        return new VersionContext($this->version, $this->solution['id'], $schemaVersion);
+    public function create(string $type, string $address, array $options = []): AddressConfigurationInstance {
+        $options = new Values($options);
+
+        $data = Values::of([
+            'Type' => $type,
+            'Address' => $address,
+            'FriendlyName' => $options['friendlyName'],
+            'AutoCreation.Enabled' => Serialize::booleanToString($options['autoCreationEnabled']),
+            'AutoCreation.Type' => $options['autoCreationType'],
+            'AutoCreation.ConversationServiceSid' => $options['autoCreationConversationServiceSid'],
+            'AutoCreation.WebhookUrl' => $options['autoCreationWebhookUrl'],
+            'AutoCreation.WebhookMethod' => $options['autoCreationWebhookMethod'],
+            'AutoCreation.WebhookFilters' => Serialize::map($options['autoCreationWebhookFilters'], function($e) { return $e; }),
+            'AutoCreation.StudioFlowSid' => $options['autoCreationStudioFlowSid'],
+            'AutoCreation.StudioRetryCount' => $options['autoCreationStudioRetryCount'],
+        ]);
+
+        $payload = $this->version->create('POST', $this->uri, [], $data);
+
+        return new AddressConfigurationInstance($this->version, $payload);
+    }
+
+    /**
+     * Constructs a AddressConfigurationContext
+     *
+     * @param string $sid The SID or Address of the Configuration.
+     */
+    public function getContext(string $sid): AddressConfigurationContext {
+        return new AddressConfigurationContext($this->version, $sid);
     }
 
     /**
@@ -126,6 +158,6 @@ class VersionList extends ListResource {
      * @return string Machine friendly representation
      */
     public function __toString(): string {
-        return '[Twilio.Events.V1.VersionList]';
+        return '[Twilio.Conversations.V1.AddressConfigurationList]';
     }
 }

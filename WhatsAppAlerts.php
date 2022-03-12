@@ -5,14 +5,13 @@ require_once "emLoggerTrait.php";
 require_once "vendor/autoload.php";
 
 use \Exception;
-use \Project;
-use \REDCap;
 use REDCapEntity\Entity;
 use REDCapEntity\EntityDB;
 use REDCapEntity\EntityFactory;
 
+require_once("classes/WhatsAppHelper.php");
+require_once("classes/MessageContext.php");
 require_once("classes/Template.php");
-require_once("classes/WhatsAppMessage.php");
 
 class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
 
@@ -25,12 +24,13 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
     private $settings_loaded;
 
     function redcap_module_system_enable($version) {
-        // Create the Entity when the module is activated if it doesn't already exist
+        // Create the Entity when the module is enabled if it doesn't already exist
         \REDCapEntity\EntityDB::buildSchema($this->PREFIX);
     }
 
     function redcap_every_page_top($project_id)
     {
+        // The following code was recommended by the redcap_entity module
         if (!defined('REDCAP_ENTITY_PREFIX')) {
             $this->emDebug("Delaying execution...");
             $this->delayModuleExecution();
@@ -43,10 +43,9 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
         if (strpos(PAGE, 'ExternalModules/manager/control_center.php') !== false) {
             $this->includeJs('js/config.js');
             $this->setJsSettings(['modulePrefix' => $this->PREFIX]);
-
-            return;
         }
     }
+
 
     /**
      * Integrated REDCap Entity to manage messages log
@@ -148,13 +147,6 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                 'status' => [
                     'name' => 'Status',
                     'type' => 'text',
-                    // 'choices' => [
-                    //     'queued' => 'Queued',
-                    //     'sent' => 'Sent',
-                    //     'delivered' => 'Delivered',
-                    //     'read'  => 'Read',
-                    //     'error' => 'Error',
-                    // ]
                 ],
                 'raw' => [
                     'name' => 'Raw',
@@ -181,38 +173,53 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
 
 
     /**
+     * Given a message/template configuration, send it!
+     * @param $message_config
+     * @return mixed false or log_id
+     * @throws \Twilio\Exceptions\ConfigurationException
+     * @throws \Twilio\Exceptions\TwilioException
+     */
+    public function sendMessage($message_config) {
+        # It's What's App Time - we will first parse out the template and context
+        $wah = new WhatsAppHelper($this);
+
+        # Try to populate the wah from the parsed what's app message config
+        $wah->createOutboundMessage($message_config);
+
+        # Set WAH Twilio settings
+        $wah->setAccountSid($this->getProjectSetting('account-sid'));
+        $wah->setToken($this->getProjectSetting('token'));
+        $wah->setFromNumber($this->getProjectSetting('from-number'));
+        $wah->setCallbackUrl($this->getInboundUrl());
+
+        # Ensure we have a valid configuration
+        if (! $wah->configurationValid()) {
+            $this->emError("configurationValid failed due to errors", $wah->getErrors());
+            return false;
+        }
+
+        # Send message
+        if ($wah->sendMessage()) {
+            $wah->setDateSent(strtotime('now'));
+            $log_id = $wah->logNewMessage();
+            return $log_id;
+        } else {
+            $this->emError("Something went wrong sending message");
+            return false;
+        }
+    }
+
+
+    /**
      * Generic REDCap Email Hook
      */
 	public function redcap_email( $to, $from, $subject, $message, $cc, $bcc, $fromName, $attachments ) {
         # Determine if this outbound email is intended to create a WhatsApp Message
-        if (!$config = $this->parseEmailForWhatsAppMessage($message)) return true;
+        if (!$message_config = $this->parseEmailForWhatsAppMessage($message)) return true;
 
         try {
-            # It's Whats App Time
-            $wam = new WhatsAppMessage($this);
-
-            # Try to populate the wam from the message config
-            $wam->loadByConfig($config);
-
-            # Load Twilio settings
-            $wam->setAccountSid($this->getProjectSetting('account-sid'));
-            $wam->setToken($this->getProjectSetting('token'));
-            $wam->setFromNumber($this->getProjectSetting('from-number'));
-            $wam->setCallbackUrl($this->getInboundUrl());
-
-            # Ensure we have a valid configuration
-            if (! $wam->configurationValid()) {
-                $this->emError("configurationValid failed due to errors", $wam->getErrors());
-                return false;
-            }
-
-            # Send message
-            if ($wam->sendMessage()) {
-                $wam->setDateSent(strtotime('now'));
-                $wam->logNewMessage();
-            } else {
-                $this->emError("Something went wrong sending message");
-            }
+            # It's What's App Time
+            $this->sendMessage($message_config);
         } catch (Exception $e) {
             $this->emError("Caught Exception: " . $e->getMessage());
         }
@@ -221,35 +228,36 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
         return false;
 	}
 
-    // TODO: Cleanup arguments ofr this function to be more elegant...
-    public function sendIcebreakerMessage($wam) {
-        try {
-            $message_id = $wam->entity->getId();
-            $record_id = $wam->getRecordId();
-            $to_number = $wam->getToNumber();
-            // $this->emDebug($wam);
 
-            $this->emDebug("Sending Icebreaker based on failed callback from $record_id");
-            $icebreaker_template  = $this->getProjectSetting('icebreaker-template-id');
-            $icebreaker_variables = $this->getProjectSetting('icebreaker-variables');
-            $this->emDebug("Loaded variables for icebreaker", $icebreaker_variables);
+
+    public function sendIcebreakerMessage($wah) {
+        try {
+
+            # Get context from previous message
+            $message_id = $wah->entity->getId();
+            $record_id = $wah->getRecordId();
+            $to_number = $wah->getToNumber();
+
+            $icebreaker_template       = $this->getProjectSetting('icebreaker-template-id');
+            $icebreaker_variables_json = $this->getProjectSetting('icebreaker-variables');
+            $this->emDebug("Sending Icebreaker template $icebreaker_template for $message_id / #$record_id");
 
             // Substitute variables with context
-            if (!empty($icebreaker_variables)) {
-                $piped_vars = \Piping::replaceVariablesInLabel($icebreaker_variables, $record_id,
+            if (!empty($icebreaker_variables_json)) {
+                $this->emDebug("Record $record_id in project " . $this->getProjectId());
+                $piped_vars = \Piping::replaceVariablesInLabel($icebreaker_variables_json, $record_id,
                     null, 1, null, false,
                     $this->getProjectId(), false
                 );
-                $this->emDebug("After Piping", $piped_vars);
-                $variables = empty($icebreaker_variables) ? [] : json_decode($piped_vars, true);
+                $this->emDebug("Setting Icebreaker Variables Json to: " . $piped_vars);
+                $variables = json_decode($piped_vars,true);
                 // $this->emDebug("As an array", $variables);
             } else {
                 $variables = [];
             }
 
-            $wam2 = new WhatsAppMessage($this);
-            // Create a config object which will tell the WAM class to send a message
-            $config = [
+            // Create a config object which will tell the WAH class to send a message
+            $message_config = [
                 "type" => "whatsapp",
                 "template_id" => $icebreaker_template,
                 "variables" => $variables,
@@ -259,41 +267,44 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                 ],
                 "REDCap Message" => "Triggered by failed message " . $message_id
             ];
+            $this->emDebug("Config",$message_config);
+            $this->sendMessage($message_config);
 
-            $this->emDebug("Config",$config);
-            if($wam2->loadByConfig($config)) {
-                # Load Twilio settings
-                $wam2->setAccountSid($this->getProjectSetting('account-sid'));
-                $wam2->setToken($this->getProjectSetting('token'));
-                $wam2->setFromNumber($this->getProjectSetting('from-number'));
-                $wam2->setCallbackUrl($this->getInboundUrl());
-
-                # Ensure we have a valid configuration
-                if (! $wam2->configurationValid()) {
-                    $this->emError("configurationValid failed due to errors", $wam2->getErrors());
-                    return false;
-                }
-
-                # Send message
-                if ($wam2->sendMessage()) {
-                    $wam->setDateSent(strtotime('now'));
-                    $wam->logNewMessage();
-                } else {
-                    $this->emError("Something went wrong sending message");
-                };
-            } else {
-                $this->emError("Unable to loadByConfig");
-            };
+            // if($wam2->createOutboundMessage($config)) {
+            //     # Load Twilio settings
+            //     $wam2->setAccountSid($this->getProjectSetting('account-sid'));
+            //     $wam2->setToken($this->getProjectSetting('token'));
+            //     $wam2->setFromNumber($this->getProjectSetting('from-number'));
+            //     $wam2->setCallbackUrl($this->getInboundUrl());
+            //
+            //     # Ensure we have a valid configuration
+            //     if (! $wam2->configurationValid()) {
+            //         $this->emError("configurationValid failed due to errors", $wam2->getErrors());
+            //         return false;
+            //     }
+            //
+            //     # Send message
+            //     if ($wam2->sendMessage()) {
+            //         $wam->setDateSent(strtotime('now'));
+            //         $wam->logNewMessage();
+            //     } else {
+            //         $this->emError("Something went wrong sending message");
+            //     };
+            // } else {
+            //     $this->emError("Unable to loadByConfig");
+            // };
         } catch (\Exception $e) {
             $this->emError("Unable to load icebreaker template: " . $e->getMessage());
         }
     }
 
 
+
+
+
+
+
     public function sendUndeliveredMessages($entities) {
-        $account_sid = $this->getProjectSetting('account-sid');
-        $token = $this->getProjectSetting('token');
-        $callbackUrl = $this->getInboundUrl();
 
         // Each entity is an undelivered message
         foreach ($entities as $entity) {
@@ -304,14 +315,13 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
             $this->emDebug("Retrying entity " . $id);
 
             // Original message to be redelivered
-            $wam = new WhatsAppMessage($this);
+            $wam = new WhatsAppHelper($this);
             $wam->loadFromEntity($entity);
 
             // Determine message age
             $original_message = $wam->getMessage();
             $age = $wam->getMessageAge();
             $new_message = "_Originally scheduled $age ago (#$id)_ \n\n" . $original_message;
-
 
             $config = [
                 "number" => $wam->getToNumber(),
@@ -326,58 +336,32 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
             $this->emDebug("Config",$config);
 
             // New message that will be used for redelivery
-            $wam2 = new WhatsAppMessage($this);
-            if($wam2->loadByConfig($config)) {
-                # Load Twilio settings
-                $wam2->setAccountSid($this->getAccountSid());
-                $wam2->setToken($this->getToken());
-                $wam2->setFromNumber($this->getFromNumber());
-                $wam2->setCallbackUrl($this->getInboundUrl());
-
-                # Ensure we have a valid configuration
-                if (! $wam2->configurationValid()) {
-                    $this->emError("configurationValid failed due to errors", $wam2->getErrors());
-                    return false;
-                }
-
-                # Send message
-                if ($wam2->sendMessage()) {
-
-                    // Save new message to log
-                    $wam2->setDateSent(strtotime('now'));
-                    $id2 = $wam2->logNewMessage();
-
-                    // Update original message
-                    $update = [
-                        "date_redelivered" => strtotime('now'),
-                        "status" => "redelivered"
-                    ];
-                    $wam->appendRaw(array_merge($update,
-                            [
-                                "REDCap Message" => "Redelivered as message #$id2 after delay of $age",
-                            ])
-                    );
-                    $update['raw'] = $wam->getRaw();
-                    $this->emDebug("About to set data to ", $update);
-                    if (!$entity->setData($update)) {
-                        $this->emError("An error occurred setting the data:", $update);
-                    };
-                    $id = $entity->save();
-                    if ($id === false) {
-                        $this->emError("An error occurred saving the data:", $update);
-                    } else {
-                        $this->emDebug("Message #$id - Resent and updated");
-                    }
-
-                } else {
-                    $this->emError("Something went wrong sending message");
+            if ($log_id = $this->sendMessage($config)) {
+                // Update original message
+                $update = [
+                    "date_redelivered" => strtotime('now'),
+                    "status" => "redelivered"
+                ];
+                $wam->appendRaw(array_merge($update,
+                        [
+                            "REDCap Message" => "Redelivered as message #$id2 after delay of $age",
+                        ])
+                );
+                $update['raw'] = $wam->getRaw();
+                $this->emDebug("About to set data to ", $update);
+                if (!$entity->setData($update)) {
+                    $this->emError("An error occurred setting the data:", $update);
                 };
+                $id = $entity->save();
+                if ($id === false) {
+                    $this->emError("An error occurred saving the data:", $update);
+                } else {
+                    $this->emDebug("Message #$id - Resent and updated");
+                }
             } else {
-                $this->emError("Unable to loadByConfig");
-            };
-
+                $this->emError("Something went wrong sending message");
+            }
         }
-
     }
 
 
@@ -468,6 +452,10 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
     }
 
 
+
+
+
+
     /** UTILITY FUNCTIONS */
 
     private static function parseHtmlishJson($input) {
@@ -538,6 +526,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
             return array(true, $result);
         }
     }
+
 
     /**
      * @param $string

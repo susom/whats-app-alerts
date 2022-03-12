@@ -7,16 +7,13 @@
  * /       /
  */
 
-namespace Twilio\Rest\Events\V1\Schema;
+namespace Twilio\Rest\Pricing\V2;
 
 use Twilio\Http\Response;
 use Twilio\Page;
 use Twilio\Version;
 
-/**
- * PLEASE NOTE that this class contains preview products that are subject to change. Use them with caution. If you currently do not have developer preview access, please contact help@twilio.com.
- */
-class VersionPage extends Page {
+class CountryPage extends Page {
     /**
      * @param Version $version Version that contains the resource
      * @param Response $response Response from the API
@@ -31,10 +28,10 @@ class VersionPage extends Page {
 
     /**
      * @param array $payload Payload response from the API
-     * @return VersionInstance \Twilio\Rest\Events\V1\Schema\VersionInstance
+     * @return CountryInstance \Twilio\Rest\Pricing\V2\CountryInstance
      */
-    public function buildInstance(array $payload): VersionInstance {
-        return new VersionInstance($this->version, $payload, $this->solution['id']);
+    public function buildInstance(array $payload): CountryInstance {
+        return new CountryInstance($this->version, $payload);
     }
 
     /**
@@ -43,6 +40,6 @@ class VersionPage extends Page {
      * @return string Machine friendly representation
      */
     public function __toString(): string {
-        return '[Twilio.Events.V1.VersionPage]';
+        return '[Twilio.Pricing.V2.CountryPage]';
     }
 }

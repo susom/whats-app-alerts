@@ -17,7 +17,7 @@ class WAM extends Entity
         parent::__construct($factory, $entity_type, $id);
     }
 
-
+    // TODO: Consider adding many of the logging/entity functions to this class
 
 
 

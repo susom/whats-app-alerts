@@ -4,11 +4,11 @@ namespace Stanford\WhatsAppAlerts;
 
 // $module->emDebug($_POST);
 
-$wam = new WhatsAppMessage($module);
-$result = $wam->processInboundMessage();
+$wah = new WhatsAppHelper($module);
+$result = $wah->processInboundMessage();
 
 
-if ($wam->getIcebreakerNeeded()) {
-    $module->sendIcebreakerMessage($wam);
+if ($wah->getIcebreakerNeeded()) {
+    $module->sendIcebreakerMessage($wah);
 }
 

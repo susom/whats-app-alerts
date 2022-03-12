@@ -7,7 +7,7 @@
  * /       /
  */
 
-namespace Twilio\Rest\Events\V1\Schema;
+namespace Twilio\Rest\Supersim\V1;
 
 use Twilio\Deserialize;
 use Twilio\Exceptions\TwilioException;
@@ -16,66 +16,72 @@ use Twilio\Values;
 use Twilio\Version;
 
 /**
- * PLEASE NOTE that this class contains preview products that are subject to change. Use them with caution. If you currently do not have developer preview access, please contact help@twilio.com.
+ * PLEASE NOTE that this class contains beta products that are subject to change. Use them with caution.
  *
- * @property string $id
- * @property int $schemaVersion
+ * @property string $sid
+ * @property string $accountSid
+ * @property string $iccid
+ * @property string $simSid
+ * @property string $status
+ * @property string $eid
+ * @property string $smdpPlusAddress
+ * @property string $errorCode
+ * @property string $errorMessage
  * @property \DateTime $dateCreated
+ * @property \DateTime $dateUpdated
  * @property string $url
- * @property string $raw
  */
-class VersionInstance extends InstanceResource {
+class EsimProfileInstance extends InstanceResource {
     /**
-     * Initialize the VersionInstance
+     * Initialize the EsimProfileInstance
      *
      * @param Version $version Version that contains the resource
      * @param mixed[] $payload The response payload
-     * @param string $id The unique identifier of the schema.
-     * @param int $schemaVersion The version of the schema
+     * @param string $sid The SID of the eSIM Profile resource to fetch
      */
-    public function __construct(Version $version, array $payload, string $id, int $schemaVersion = null) {
+    public function __construct(Version $version, array $payload, string $sid = null) {
         parent::__construct($version);
 
         // Marshaled Properties
         $this->properties = [
-            'id' => Values::array_get($payload, 'id'),
-            'schemaVersion' => Values::array_get($payload, 'schema_version'),
+            'sid' => Values::array_get($payload, 'sid'),
+            'accountSid' => Values::array_get($payload, 'account_sid'),
+            'iccid' => Values::array_get($payload, 'iccid'),
+            'simSid' => Values::array_get($payload, 'sim_sid'),
+            'status' => Values::array_get($payload, 'status'),
+            'eid' => Values::array_get($payload, 'eid'),
+            'smdpPlusAddress' => Values::array_get($payload, 'smdp_plus_address'),
+            'errorCode' => Values::array_get($payload, 'error_code'),
+            'errorMessage' => Values::array_get($payload, 'error_message'),
             'dateCreated' => Deserialize::dateTime(Values::array_get($payload, 'date_created')),
+            'dateUpdated' => Deserialize::dateTime(Values::array_get($payload, 'date_updated')),
             'url' => Values::array_get($payload, 'url'),
-            'raw' => Values::array_get($payload, 'raw'),
         ];
 
-        $this->solution = [
-            'id' => $id,
-            'schemaVersion' => $schemaVersion ?: $this->properties['schemaVersion'],
-        ];
+        $this->solution = ['sid' => $sid ?: $this->properties['sid'], ];
     }
 
     /**
      * Generate an instance context for the instance, the context is capable of
      * performing various actions.  All instance actions are proxied to the context
      *
-     * @return VersionContext Context for this VersionInstance
+     * @return EsimProfileContext Context for this EsimProfileInstance
      */
-    protected function proxy(): VersionContext {
+    protected function proxy(): EsimProfileContext {
         if (!$this->context) {
-            $this->context = new VersionContext(
-                $this->version,
-                $this->solution['id'],
-                $this->solution['schemaVersion']
-            );
+            $this->context = new EsimProfileContext($this->version, $this->solution['sid']);
         }
 
         return $this->context;
     }
 
     /**
-     * Fetch the VersionInstance
+     * Fetch the EsimProfileInstance
      *
-     * @return VersionInstance Fetched VersionInstance
+     * @return EsimProfileInstance Fetched EsimProfileInstance
      * @throws TwilioException When an HTTP error occurs.
      */
-    public function fetch(): VersionInstance {
+    public function fetch(): EsimProfileInstance {
         return $this->proxy()->fetch();
     }
 
@@ -109,6 +115,6 @@ class VersionInstance extends InstanceResource {
         foreach ($this->solution as $key => $value) {
             $context[] = "$key=$value";
         }
-        return '[Twilio.Events.V1.VersionInstance ' . \implode(' ', $context) . ']';
+        return '[Twilio.Supersim.V1.EsimProfileInstance ' . \implode(' ', $context) . ']';
     }
 }
