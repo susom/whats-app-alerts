@@ -54,10 +54,11 @@ class WhatsAppHelper
     public function logNewMessage($payload) {
         $factory = new EntityFactory();
         // $payload = $this->getPayload();
+        // xdebug_break();
         $entity = $factory->create('whats_app_message', $payload);
         if (!$entity) {
             // There was an error creating the entity:
-            $this->module->emError("Error creating entity with payload", $payload, $entity->errors);
+            $this->module->emError("Error creating entity with payload", $payload, $factory->errors);
             return false;
         } else {
             $id = $entity->getId();

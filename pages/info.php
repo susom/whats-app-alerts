@@ -8,7 +8,7 @@ namespace Stanford\WhatsAppAlerts;
 <?php
 
 echo "<pre>Inbound Url:\n" . $module->getInboundUrl() . "</pre>";
-// exit();
+exit();
 
 
 # Get all logs

@@ -214,7 +214,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                     // Save the update
                     if ($entity->setData($payload)) {
                         if ($result = $entity->save()) {
-                            $this->emDebug("Updated Entity #" . $id . " - $status - $error");
+                            $this->emDebug("Updated Entity #" . $id . " - $status $error");
                             \REDCap::logEvent(
                                 "[WhatsApp]<br>Message #" . $entity->getId() . " Status Update",
                                 implode(",\n", $diff_summary),

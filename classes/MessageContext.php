@@ -187,7 +187,7 @@ class MessageContext {
      */
     public function getRecordId()
     {
-        return $this->record_id;
+        return strval($this->record_id);
     }
 
     /**
