@@ -535,6 +535,11 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
     public function formatNumber($number, $prefix = "whatsapp:+") {
         // Strip anything but numbers and add a plus
         $clean_number = preg_replace('/[^\d]/', '', $number);
+
+        // Append a 1 to some numbers
+        if (strlen($clean_number) === 10 && left($clean_number,1) != "1") {
+            $clean_number = "1".$clean_number;
+        }
         return $prefix . $clean_number;
     }
 
