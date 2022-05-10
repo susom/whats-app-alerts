@@ -37,6 +37,7 @@ use Twilio\Version;
  * @method \Twilio\Rest\Verify\V2\Service\MessagingConfigurationContext messagingConfigurations(string $country)
  * @method \Twilio\Rest\Verify\V2\Service\EntityContext entities(string $identity)
  * @method \Twilio\Rest\Verify\V2\Service\WebhookContext webhooks(string $sid)
+ * @method \Twilio\Rest\Verify\V2\Service\AccessTokenContext accessTokens(string $sid)
  */
 class ServiceContext extends InstanceContext {
     protected $_verifications;
@@ -107,6 +108,11 @@ class ServiceContext extends InstanceContext {
             'Push.IncludeDate' => Serialize::booleanToString($options['pushIncludeDate']),
             'Push.ApnCredentialSid' => $options['pushApnCredentialSid'],
             'Push.FcmCredentialSid' => $options['pushFcmCredentialSid'],
+            'Totp.Issuer' => $options['totpIssuer'],
+            'Totp.TimeStep' => $options['totpTimeStep'],
+            'Totp.CodeLength' => $options['totpCodeLength'],
+            'Totp.Skew' => $options['totpSkew'],
+            'DefaultTemplateSid' => $options['defaultTemplateSid'],
         ]);
 
         $payload = $this->version->update('POST', $this->uri, [], $data);

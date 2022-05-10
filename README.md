@@ -150,3 +150,12 @@ an open 24 window.
 <a href="javascript:;" class="help ml-1" onclick="simpleDialog('If this checkbox is checked, any field variables (e.g., [date_of_birth]) that exist in the alert\'s subject or message    will not have their value piped if the field has been tagged as an \'Identifier\' field. In this case, it will simply replace    the field variable with [*DATA REMOVED*] rather than piping the actual data into the message.','Prevent piping of data for Identifier fields');">?</a>
 ```
 - View EM Logs from plugin page
+
+
+# The Ice Breaker Template
+What's App does not permit non-template messages unless the recipient has responded in the past 24 hours.
+If a message is rejected with a Twilio error code 63016 (window not open) - this module can automatically
+send an ice breaker message based on an approved template.  When the participant responds to the ice breaker,
+we can then automatically trigger the previously rejected messages.  The ice breaker template should be in the
+format of: `HT93dc8d8d8e768c8851380e65b8635d20_en` and is typically set from the What's App configuration page.
+

@@ -24,17 +24,24 @@
     ],
 
 	"permissions": [
-		"redcap_email"
+		"redcap_email",
+        "redcap_module_system_enable",
+        "redcap_every_page_top"
 	],
 
 	"enable-every-page-hooks-on-system-pages": false,
+
+    "no-auth-pages": [
+        "pages/statusCallback",
+        "pages/inbound"
+    ],
 
 	"links": {
 		"project": [
             {
                 "name": "What's App",
                 "icon": "fab fa-whatsapp",
-                "url": "pgaes/info.php",
+                "url": "pages/info.php",
                 "show-header-and-footer": true
             },
             {
@@ -42,23 +49,23 @@
                 "icon": "fab fa-whatsapp",
                 "url": "pages/templates.php",
                 "show-header-and-footer": true
+            },
+            {
+                "name": "What's App Messages",
+                "icon": "fab fa-whatsapp",
+                "url": "pages/messages.php",
+                "show-header-and-footer": true
             }
-
-
         ],
 		"control-center": [
 
 		]
 	},
 
-	"no-auth-pages": [
-        "pages/statusCallback"
-	],
-
 	"project-settings": [
         {
-            "key": "sid",
-            "name": "<b>Twilio SID</b>",
+            "key": "account-sid",
+            "name": "<b>Twilio Account SID</b>",
             "required": true,
             "type": "text"
         },
@@ -75,8 +82,20 @@
             "type": "text"
         },
         {
-            "key": "callback-override",
-            "name": "<b>Callback Override Url</b><br>For debugging purposes, you can replace your redcap url with a custom url (e.g. ngrok)",
+            "key": "icebreaker-template-id",
+            "name": "<b>Ice Breaker Template ID</b><br>This is an approved Twilio template that encourages a participant to respond and open a new 24 hour free-text window.  (e.g. <code>HT93dc8d8d8e768c8851380e65b8635d20_en</code>)",
+            "required": false,
+            "type": "text"
+        },
+        {
+            "key": "icebreaker-variables",
+            "name": "<b>Ice Breaker Template Variables</b><br>Should your icebreaker include variables, you need to set their value(s) here.  The format is of a json-encoded array.  You cannot assume any event/instance context so do not use context-specific smart variables.  For example, 'Dear {{1}} - please click to view your {{2}} study messages' might be<br><code>[ \"[baseline_arm_1][first_name]\", \"SUPERMAN\" ]</code>",
+            "required": false,
+            "type": "text"
+        },
+        {
+            "key": "override-url",
+            "name": "<b>Override Url</b><br>For debugging purposes, you can replace your redcap url with a custom url (e.g. ngrok)",
             "required": false,
             "type": "text"
         },

@@ -54,6 +54,7 @@ class ChallengeList extends ListResource {
             'Details.Message' => $options['detailsMessage'],
             'Details.Fields' => Serialize::map($options['detailsFields'], function($e) { return Serialize::jsonObject($e); }),
             'HiddenDetails' => Serialize::jsonObject($options['hiddenDetails']),
+            'AuthPayload' => $options['authPayload'],
         ]);
 
         $payload = $this->version->create('POST', $this->uri, [], $data);
@@ -129,6 +130,7 @@ class ChallengeList extends ListResource {
         $params = Values::of([
             'FactorSid' => $options['factorSid'],
             'Status' => $options['status'],
+            'Order' => $options['order'],
             'PageToken' => $pageToken,
             'Page' => $pageNumber,
             'PageSize' => $pageSize,

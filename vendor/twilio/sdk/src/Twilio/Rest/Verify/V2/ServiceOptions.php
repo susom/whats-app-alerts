@@ -35,10 +35,18 @@ abstract class ServiceOptions {
      *                                     service.
      * @param string $pushFcmCredentialSid Optional. Set FCM Credential for this
      *                                     service.
+     * @param string $totpIssuer Optional. Set TOTP Issuer for this service.
+     * @param int $totpTimeStep Optional. How often, in seconds, are TOTP codes
+     *                          generated
+     * @param int $totpCodeLength Optional. Number of digits for generated TOTP
+     *                            codes
+     * @param int $totpSkew Optional. The number of past and future time-steps
+     *                      valid at a given time
+     * @param string $defaultTemplateSid The verification template SMS messages.
      * @return CreateServiceOptions Options builder
      */
-    public static function create(int $codeLength = Values::NONE, bool $lookupEnabled = Values::NONE, bool $skipSmsToLandlines = Values::NONE, bool $dtmfInputRequired = Values::NONE, string $ttsName = Values::NONE, bool $psd2Enabled = Values::NONE, bool $doNotShareWarningEnabled = Values::NONE, bool $customCodeEnabled = Values::NONE, bool $pushIncludeDate = Values::NONE, string $pushApnCredentialSid = Values::NONE, string $pushFcmCredentialSid = Values::NONE): CreateServiceOptions {
-        return new CreateServiceOptions($codeLength, $lookupEnabled, $skipSmsToLandlines, $dtmfInputRequired, $ttsName, $psd2Enabled, $doNotShareWarningEnabled, $customCodeEnabled, $pushIncludeDate, $pushApnCredentialSid, $pushFcmCredentialSid);
+    public static function create(int $codeLength = Values::NONE, bool $lookupEnabled = Values::NONE, bool $skipSmsToLandlines = Values::NONE, bool $dtmfInputRequired = Values::NONE, string $ttsName = Values::NONE, bool $psd2Enabled = Values::NONE, bool $doNotShareWarningEnabled = Values::NONE, bool $customCodeEnabled = Values::NONE, bool $pushIncludeDate = Values::NONE, string $pushApnCredentialSid = Values::NONE, string $pushFcmCredentialSid = Values::NONE, string $totpIssuer = Values::NONE, int $totpTimeStep = Values::NONE, int $totpCodeLength = Values::NONE, int $totpSkew = Values::NONE, string $defaultTemplateSid = Values::NONE): CreateServiceOptions {
+        return new CreateServiceOptions($codeLength, $lookupEnabled, $skipSmsToLandlines, $dtmfInputRequired, $ttsName, $psd2Enabled, $doNotShareWarningEnabled, $customCodeEnabled, $pushIncludeDate, $pushApnCredentialSid, $pushFcmCredentialSid, $totpIssuer, $totpTimeStep, $totpCodeLength, $totpSkew, $defaultTemplateSid);
     }
 
     /**
@@ -64,10 +72,18 @@ abstract class ServiceOptions {
      *                                     service.
      * @param string $pushFcmCredentialSid Optional. Set FCM Credential for this
      *                                     service.
+     * @param string $totpIssuer Optional. Set TOTP Issuer for this service.
+     * @param int $totpTimeStep Optional. How often, in seconds, are TOTP codes
+     *                          generated
+     * @param int $totpCodeLength Optional. Number of digits for generated TOTP
+     *                            codes
+     * @param int $totpSkew Optional. The number of past and future time-steps
+     *                      valid at a given time
+     * @param string $defaultTemplateSid The verification template SMS messages.
      * @return UpdateServiceOptions Options builder
      */
-    public static function update(string $friendlyName = Values::NONE, int $codeLength = Values::NONE, bool $lookupEnabled = Values::NONE, bool $skipSmsToLandlines = Values::NONE, bool $dtmfInputRequired = Values::NONE, string $ttsName = Values::NONE, bool $psd2Enabled = Values::NONE, bool $doNotShareWarningEnabled = Values::NONE, bool $customCodeEnabled = Values::NONE, bool $pushIncludeDate = Values::NONE, string $pushApnCredentialSid = Values::NONE, string $pushFcmCredentialSid = Values::NONE): UpdateServiceOptions {
-        return new UpdateServiceOptions($friendlyName, $codeLength, $lookupEnabled, $skipSmsToLandlines, $dtmfInputRequired, $ttsName, $psd2Enabled, $doNotShareWarningEnabled, $customCodeEnabled, $pushIncludeDate, $pushApnCredentialSid, $pushFcmCredentialSid);
+    public static function update(string $friendlyName = Values::NONE, int $codeLength = Values::NONE, bool $lookupEnabled = Values::NONE, bool $skipSmsToLandlines = Values::NONE, bool $dtmfInputRequired = Values::NONE, string $ttsName = Values::NONE, bool $psd2Enabled = Values::NONE, bool $doNotShareWarningEnabled = Values::NONE, bool $customCodeEnabled = Values::NONE, bool $pushIncludeDate = Values::NONE, string $pushApnCredentialSid = Values::NONE, string $pushFcmCredentialSid = Values::NONE, string $totpIssuer = Values::NONE, int $totpTimeStep = Values::NONE, int $totpCodeLength = Values::NONE, int $totpSkew = Values::NONE, string $defaultTemplateSid = Values::NONE): UpdateServiceOptions {
+        return new UpdateServiceOptions($friendlyName, $codeLength, $lookupEnabled, $skipSmsToLandlines, $dtmfInputRequired, $ttsName, $psd2Enabled, $doNotShareWarningEnabled, $customCodeEnabled, $pushIncludeDate, $pushApnCredentialSid, $pushFcmCredentialSid, $totpIssuer, $totpTimeStep, $totpCodeLength, $totpSkew, $defaultTemplateSid);
     }
 }
 
@@ -94,8 +110,16 @@ class CreateServiceOptions extends Options {
      *                                     service.
      * @param string $pushFcmCredentialSid Optional. Set FCM Credential for this
      *                                     service.
+     * @param string $totpIssuer Optional. Set TOTP Issuer for this service.
+     * @param int $totpTimeStep Optional. How often, in seconds, are TOTP codes
+     *                          generated
+     * @param int $totpCodeLength Optional. Number of digits for generated TOTP
+     *                            codes
+     * @param int $totpSkew Optional. The number of past and future time-steps
+     *                      valid at a given time
+     * @param string $defaultTemplateSid The verification template SMS messages.
      */
-    public function __construct(int $codeLength = Values::NONE, bool $lookupEnabled = Values::NONE, bool $skipSmsToLandlines = Values::NONE, bool $dtmfInputRequired = Values::NONE, string $ttsName = Values::NONE, bool $psd2Enabled = Values::NONE, bool $doNotShareWarningEnabled = Values::NONE, bool $customCodeEnabled = Values::NONE, bool $pushIncludeDate = Values::NONE, string $pushApnCredentialSid = Values::NONE, string $pushFcmCredentialSid = Values::NONE) {
+    public function __construct(int $codeLength = Values::NONE, bool $lookupEnabled = Values::NONE, bool $skipSmsToLandlines = Values::NONE, bool $dtmfInputRequired = Values::NONE, string $ttsName = Values::NONE, bool $psd2Enabled = Values::NONE, bool $doNotShareWarningEnabled = Values::NONE, bool $customCodeEnabled = Values::NONE, bool $pushIncludeDate = Values::NONE, string $pushApnCredentialSid = Values::NONE, string $pushFcmCredentialSid = Values::NONE, string $totpIssuer = Values::NONE, int $totpTimeStep = Values::NONE, int $totpCodeLength = Values::NONE, int $totpSkew = Values::NONE, string $defaultTemplateSid = Values::NONE) {
         $this->options['codeLength'] = $codeLength;
         $this->options['lookupEnabled'] = $lookupEnabled;
         $this->options['skipSmsToLandlines'] = $skipSmsToLandlines;
@@ -107,6 +131,11 @@ class CreateServiceOptions extends Options {
         $this->options['pushIncludeDate'] = $pushIncludeDate;
         $this->options['pushApnCredentialSid'] = $pushApnCredentialSid;
         $this->options['pushFcmCredentialSid'] = $pushFcmCredentialSid;
+        $this->options['totpIssuer'] = $totpIssuer;
+        $this->options['totpTimeStep'] = $totpTimeStep;
+        $this->options['totpCodeLength'] = $totpCodeLength;
+        $this->options['totpSkew'] = $totpSkew;
+        $this->options['defaultTemplateSid'] = $defaultTemplateSid;
     }
 
     /**
@@ -241,6 +270,64 @@ class CreateServiceOptions extends Options {
     }
 
     /**
+     * Optional configuration for the TOTP factors. Set TOTP Issuer for this service. This will allow to configure the issuer of the TOTP URI. Defaults to the service friendly name if not provided.
+     *
+     * @param string $totpIssuer Optional. Set TOTP Issuer for this service.
+     * @return $this Fluent Builder
+     */
+    public function setTotpIssuer(string $totpIssuer): self {
+        $this->options['totpIssuer'] = $totpIssuer;
+        return $this;
+    }
+
+    /**
+     * Optional configuration for the TOTP factors. Defines how often, in seconds, are TOTP codes generated. i.e, a new TOTP code is generated every time_step seconds. Must be between 20 and 60 seconds, inclusive. Defaults to 30 seconds
+     *
+     * @param int $totpTimeStep Optional. How often, in seconds, are TOTP codes
+     *                          generated
+     * @return $this Fluent Builder
+     */
+    public function setTotpTimeStep(int $totpTimeStep): self {
+        $this->options['totpTimeStep'] = $totpTimeStep;
+        return $this;
+    }
+
+    /**
+     * Optional configuration for the TOTP factors. Number of digits for generated TOTP codes. Must be between 3 and 8, inclusive. Defaults to 6
+     *
+     * @param int $totpCodeLength Optional. Number of digits for generated TOTP
+     *                            codes
+     * @return $this Fluent Builder
+     */
+    public function setTotpCodeLength(int $totpCodeLength): self {
+        $this->options['totpCodeLength'] = $totpCodeLength;
+        return $this;
+    }
+
+    /**
+     * Optional configuration for the TOTP factors. The number of time-steps, past and future, that are valid for validation of TOTP codes. Must be between 0 and 2, inclusive. Defaults to 1
+     *
+     * @param int $totpSkew Optional. The number of past and future time-steps
+     *                      valid at a given time
+     * @return $this Fluent Builder
+     */
+    public function setTotpSkew(int $totpSkew): self {
+        $this->options['totpSkew'] = $totpSkew;
+        return $this;
+    }
+
+    /**
+     * The default message [template](https://www.twilio.com/docs/verify/api/templates). Will be used for all SMS verifications unless explicitly overriden. SMS channel only.
+     *
+     * @param string $defaultTemplateSid The verification template SMS messages.
+     * @return $this Fluent Builder
+     */
+    public function setDefaultTemplateSid(string $defaultTemplateSid): self {
+        $this->options['defaultTemplateSid'] = $defaultTemplateSid;
+        return $this;
+    }
+
+    /**
      * Provide a friendly representation
      *
      * @return string Machine friendly representation
@@ -275,8 +362,16 @@ class UpdateServiceOptions extends Options {
      *                                     service.
      * @param string $pushFcmCredentialSid Optional. Set FCM Credential for this
      *                                     service.
+     * @param string $totpIssuer Optional. Set TOTP Issuer for this service.
+     * @param int $totpTimeStep Optional. How often, in seconds, are TOTP codes
+     *                          generated
+     * @param int $totpCodeLength Optional. Number of digits for generated TOTP
+     *                            codes
+     * @param int $totpSkew Optional. The number of past and future time-steps
+     *                      valid at a given time
+     * @param string $defaultTemplateSid The verification template SMS messages.
      */
-    public function __construct(string $friendlyName = Values::NONE, int $codeLength = Values::NONE, bool $lookupEnabled = Values::NONE, bool $skipSmsToLandlines = Values::NONE, bool $dtmfInputRequired = Values::NONE, string $ttsName = Values::NONE, bool $psd2Enabled = Values::NONE, bool $doNotShareWarningEnabled = Values::NONE, bool $customCodeEnabled = Values::NONE, bool $pushIncludeDate = Values::NONE, string $pushApnCredentialSid = Values::NONE, string $pushFcmCredentialSid = Values::NONE) {
+    public function __construct(string $friendlyName = Values::NONE, int $codeLength = Values::NONE, bool $lookupEnabled = Values::NONE, bool $skipSmsToLandlines = Values::NONE, bool $dtmfInputRequired = Values::NONE, string $ttsName = Values::NONE, bool $psd2Enabled = Values::NONE, bool $doNotShareWarningEnabled = Values::NONE, bool $customCodeEnabled = Values::NONE, bool $pushIncludeDate = Values::NONE, string $pushApnCredentialSid = Values::NONE, string $pushFcmCredentialSid = Values::NONE, string $totpIssuer = Values::NONE, int $totpTimeStep = Values::NONE, int $totpCodeLength = Values::NONE, int $totpSkew = Values::NONE, string $defaultTemplateSid = Values::NONE) {
         $this->options['friendlyName'] = $friendlyName;
         $this->options['codeLength'] = $codeLength;
         $this->options['lookupEnabled'] = $lookupEnabled;
@@ -289,6 +384,11 @@ class UpdateServiceOptions extends Options {
         $this->options['pushIncludeDate'] = $pushIncludeDate;
         $this->options['pushApnCredentialSid'] = $pushApnCredentialSid;
         $this->options['pushFcmCredentialSid'] = $pushFcmCredentialSid;
+        $this->options['totpIssuer'] = $totpIssuer;
+        $this->options['totpTimeStep'] = $totpTimeStep;
+        $this->options['totpCodeLength'] = $totpCodeLength;
+        $this->options['totpSkew'] = $totpSkew;
+        $this->options['defaultTemplateSid'] = $defaultTemplateSid;
     }
 
     /**
@@ -430,6 +530,64 @@ class UpdateServiceOptions extends Options {
      */
     public function setPushFcmCredentialSid(string $pushFcmCredentialSid): self {
         $this->options['pushFcmCredentialSid'] = $pushFcmCredentialSid;
+        return $this;
+    }
+
+    /**
+     * Optional configuration for the TOTP factors. Set TOTP Issuer for this service. This will allow to configure the issuer of the TOTP URI.
+     *
+     * @param string $totpIssuer Optional. Set TOTP Issuer for this service.
+     * @return $this Fluent Builder
+     */
+    public function setTotpIssuer(string $totpIssuer): self {
+        $this->options['totpIssuer'] = $totpIssuer;
+        return $this;
+    }
+
+    /**
+     * Optional configuration for the TOTP factors. Defines how often, in seconds, are TOTP codes generated. i.e, a new TOTP code is generated every time_step seconds. Must be between 20 and 60 seconds, inclusive. Defaults to 30 seconds
+     *
+     * @param int $totpTimeStep Optional. How often, in seconds, are TOTP codes
+     *                          generated
+     * @return $this Fluent Builder
+     */
+    public function setTotpTimeStep(int $totpTimeStep): self {
+        $this->options['totpTimeStep'] = $totpTimeStep;
+        return $this;
+    }
+
+    /**
+     * Optional configuration for the TOTP factors. Number of digits for generated TOTP codes. Must be between 3 and 8, inclusive. Defaults to 6
+     *
+     * @param int $totpCodeLength Optional. Number of digits for generated TOTP
+     *                            codes
+     * @return $this Fluent Builder
+     */
+    public function setTotpCodeLength(int $totpCodeLength): self {
+        $this->options['totpCodeLength'] = $totpCodeLength;
+        return $this;
+    }
+
+    /**
+     * Optional configuration for the TOTP factors. The number of time-steps, past and future, that are valid for validation of TOTP codes. Must be between 0 and 2, inclusive. Defaults to 1
+     *
+     * @param int $totpSkew Optional. The number of past and future time-steps
+     *                      valid at a given time
+     * @return $this Fluent Builder
+     */
+    public function setTotpSkew(int $totpSkew): self {
+        $this->options['totpSkew'] = $totpSkew;
+        return $this;
+    }
+
+    /**
+     * The default message [template](https://www.twilio.com/docs/verify/api/templates). Will be used for all SMS verifications unless explicitly overriden. SMS channel only.
+     *
+     * @param string $defaultTemplateSid The verification template SMS messages.
+     * @return $this Fluent Builder
+     */
+    public function setDefaultTemplateSid(string $defaultTemplateSid): self {
+        $this->options['defaultTemplateSid'] = $defaultTemplateSid;
         return $this;
     }
 

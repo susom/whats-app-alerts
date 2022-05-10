@@ -55,6 +55,11 @@ class FleetList extends ListResource {
             'CommandsEnabled' => Serialize::booleanToString($options['commandsEnabled']),
             'CommandsUrl' => $options['commandsUrl'],
             'CommandsMethod' => $options['commandsMethod'],
+            'IpCommandsUrl' => $options['ipCommandsUrl'],
+            'IpCommandsMethod' => $options['ipCommandsMethod'],
+            'SmsCommandsEnabled' => Serialize::booleanToString($options['smsCommandsEnabled']),
+            'SmsCommandsUrl' => $options['smsCommandsUrl'],
+            'SmsCommandsMethod' => $options['smsCommandsMethod'],
         ]);
 
         $payload = $this->version->create('POST', $this->uri, [], $data);
