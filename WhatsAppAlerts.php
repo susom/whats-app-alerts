@@ -26,6 +26,8 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
     private $settings;
     private $settings_loaded;
 
+    private $last_error;
+
     private $wah;
 
     /**
