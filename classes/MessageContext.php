@@ -11,7 +11,7 @@ use \REDCap;
  * to know if any context applies.  Generally you can provide details via piping in the subject, but only to a
  * certain extent.  For example, a scheduled ASI email will have a record, but no event / project context
  *
- * This module sets:
+ * This module does its best to set:
  * source, source_id, project_id, record_id, event_id, instance, and event_name
  *
  */
@@ -24,6 +24,11 @@ class MessageContext {
     private $instance;
     private $event_name;
 
+    /**
+     * You can pass in an array of known context to override as needed
+     * @param $context
+     * @throws \Exception
+     */
     public function __construct($context = []) {
         /*
             [file] => /var/www/html/redcap_v10.8.2/DataEntry/index.php
@@ -64,7 +69,6 @@ class MessageContext {
         $bt = debug_backtrace(0);
         // $this->emDebug($bt);
         foreach ($bt as $t) {
-            // \Plugin::log($t);
             $function = $t['function'] ?? FALSE;
             $class = $t['class'] ?? FALSE;
             $args = $t['args'] ?? FALSE;
@@ -84,8 +88,8 @@ class MessageContext {
                 break;
             }
 
+            // If email is from the SurveyScheduler
             if ($function == 'scheduleParticipantInvitation' && $class == 'SurveyScheduler') {
-                // \Plugin::log($args);
                 // scheduleParticipantInvitation($survey_id, $event_id, $record)
                 $this->source     = "ASI (Immediate)";
                 $this->source_id  = $args[0] ?? null;
@@ -95,7 +99,6 @@ class MessageContext {
             }
 
             if ($function == 'SurveyInvitationEmailer' && $class == 'Jobs') {
-                \Plugin::log($args);
                 $this->source    = "ASI (Delayed)";
                 $this->source_id = "";
                 // Unable to get project_id in this case
@@ -138,6 +141,23 @@ class MessageContext {
         }
     }
 
+
+    /**
+     * @return array
+     */
+    public function getContextAsArray() {
+        // TODO: Do I need project_id here as well?
+        return [
+            "source"        => $this->getSource(),
+            "source_id"     => $this->getSourceId(),
+            "record_id"     => $this->getRecordId(),
+            "event_id"      => $this->getEventId(),
+            "event_name"    => $this->getEventName(),
+            "instance"      => $this->getInstance(),
+        ];
+    }
+
+
     /**
      * @return mixed
      */
@@ -163,7 +183,7 @@ class MessageContext {
     }
 
     /**
-     * @return mixed
+     * @return string
      */
     public function getRecordId()
     {

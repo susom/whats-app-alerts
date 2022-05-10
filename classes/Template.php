@@ -269,7 +269,7 @@ class Template
 
     // protected $account_sid;
 
-    protected $message;     // Constructed message with variables substituted
+    protected $body;     // Constructed message with variables substituted
 
     /**
      * @param WhatsAppAlerts $module
@@ -347,6 +347,7 @@ class Template
             throw new Exception("Unable to fetch Twilio templates: " . $response->getStatusCode() . " - " . $response->__toString());
         }
 
+        $this->module->setProjectSetting('templates', $templates);
         return $templates;
     }
 
@@ -386,11 +387,11 @@ class Template
 
     /**
      * Construct the actual message from the content and variables
-     * @param $variables array
-     * @returns string message
+     * @param $variables
+     * @return array|string|string[]
      * @throws Exception
      */
-    public function getMessageFromVariables($variables) {
+    public function getBody($variables = []) {
         // Parse the template or raw message for {x} variables
         $variable_placeholders = self::parseContentVariables($this->content);
 
@@ -401,17 +402,20 @@ class Template
         }
 
         // Substitute variables into placeholders
-        $message = $this->content;
+        $body = $this->content;
         foreach ($variable_placeholders as $match) {
             $index = $match['index'];
             $token = $match['token'];
             $value = $variables[$index-1];
             // $this->module->emDebug("Replacing index $index token $token with $value");
-            $message = str_replace($token, $value, $message);
+            $body = str_replace($token, $value, $body);
         }
-        $this->message = $message;
-        return $message;
+        // $this->body = $body;
+        return $body;
     }
+
+
+
 
 
     /**
@@ -444,7 +448,7 @@ class Template
         $this->module->emDebug("As an array", $variables);
 
         // Build the actual message body and return
-        return $this->getMessageFromVariables($variables);
+        return $this->getBody($variables);
     }
 
 

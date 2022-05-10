@@ -6,6 +6,8 @@ namespace Stanford\WhatsAppAlerts;
 use Stanford\WhatsAppAlerts\Template;
 
 $t = new Template($module);
+
+// Pull the latest templates from Twilio's API
 $r = $t->refreshTemplates(true);
 
 ?>
