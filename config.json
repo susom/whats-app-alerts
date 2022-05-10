@@ -3,11 +3,11 @@
 
 	"namespace": "Stanford\\WhatsAppAlerts",
 
-	"description": "Convert Alerts and Notifications to use What's App",
+	"description": "Send Alerts and Notifications to participants using What's App",
 
 	"documentation": "README.md",
 
-    "framework-version": 5,
+    "framework-version": 7,
 
 	"authors": [
 		{
@@ -53,7 +53,7 @@
             {
                 "name": "What's App Messages",
                 "icon": "fab fa-whatsapp",
-                "url": "pages/messages.php",
+                "url": "pages/message_list.php",
                 "show-header-and-footer": true
             }
         ],
