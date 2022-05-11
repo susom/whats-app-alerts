@@ -282,7 +282,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                         if ($record_count == 1) {
                             \REDCap::logEvent(
                                 "[WhatsApp]<br>Incoming message received",
-                                "New message from sender at " . $IM->getFromNumber() . " recorded as message #$logEntryId",
+                                "New message from sender at " . $IM->getFromNumber() . " recorded as message #$logEntryId\n" . $IM->getBody(),
                                 "", $record_id, "", $this->getProjectId()
                             );
 
@@ -291,6 +291,8 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                             if ($entities = $this->wah->getUndeliveredMessages($record_id)) {
                                 $this->emDebug("Found " . count($entities) . " undelivered messages for record " . $record_id);
                                 $this->sendUndeliveredMessages($entities);
+                            } else {
+                                $this->emDebug("No undelivered messages for record $record_id");
                             };
                         } else {
                             if ($record_count == 0) {
@@ -465,9 +467,17 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
     }
 
 
+    // TO BE DELETED
+    public function testUndelivered() {
+        $this->wah = new WhatsAppHelper($this);
 
+        $record_id = $_GET['record_id'];
+        if ($record_id) {
+            $entities = $this->wah->getUndeliveredMessages($record_id);
+            echo "<pre>". print_r($entities,true) . "</pre>";
+        }
 
-
+    }
 
     private function loadSettings() {
         $this->account_sid = $this->getProjectSetting('account-sid');
