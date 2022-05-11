@@ -127,7 +127,7 @@ class WhatsAppHelper
             ->orderBy('created')
             ->execute();
 
-        if (count($entities) > 0) {
+        if ($entities) {
             return $entities;
         } else {
             return false;
