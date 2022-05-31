@@ -1,14 +1,9 @@
 {
 	"name": "WhatsAppAlerts",
-
 	"namespace": "Stanford\\WhatsAppAlerts",
-
 	"description": "Send Alerts and Notifications to participants using What's App",
-
 	"documentation": "README.md",
-
-    "framework-version": 7,
-
+    "framework-version": 9,
 	"authors": [
 		{
 			"name": "Andrew Martin",
@@ -16,8 +11,8 @@
 			"institution": "Stanford University"
 		},
         {
-            "name": "Ryan Valentine",
-            "email": "rval@stanford.edu",
+            "name": "Jordan Schultz",
+            "email": "jmschult@stanford.edu",
             "institution": "Stanford University"
         }
 
@@ -32,18 +27,12 @@
 	"enable-every-page-hooks-on-system-pages": false,
 
     "no-auth-pages": [
-        "pages/statusCallback",
+        "pages/status_callback",
         "pages/inbound"
     ],
 
 	"links": {
 		"project": [
-            {
-                "name": "What's App",
-                "icon": "fab fa-whatsapp",
-                "url": "pages/info.php",
-                "show-header-and-footer": true
-            },
             {
                 "name": "What's App Templates",
                 "icon": "fab fa-whatsapp",
@@ -58,8 +47,13 @@
             }
         ],
 		"control-center": [
-
-		]
+            {
+                "name": "What's App Information",
+                "icon": "fab fa-whatsapp",
+                "url": "pages/info.php",
+                "show-header-and-footer": true
+            }
+        ]
 	},
 
 	"project-settings": [
@@ -94,12 +88,6 @@
             "type": "text"
         },
         {
-            "key": "override-url",
-            "name": "<b>Override Url</b><br>For debugging purposes, you can replace your redcap url with a custom url (e.g. ngrok)",
-            "required": false,
-            "type": "text"
-        },
-        {
 			"key": "enable-project-debug-logging",
 			"name": "<b>Enable Debug Logging</b><br><i>(optional)</i> Requires installation and configuration of emLogger",
 			"required": false,
@@ -109,6 +97,12 @@
 
 
 	"system-settings": [
+        {
+            "key": "override-url",
+            "name": "<b>Override Inbound Url</b><br>For debugging purposes, you can replace your base redcap url with a custom url (<i>e.g.</i> for ngrok you might use <code>http://1.2.3.4.ngrok.io</code>)",
+            "required": false,
+            "type": "text"
+        },
 		{
 			"key": "enable-system-debug-logging",
 			"name": "<b>Enable Debug Logging (system-wide)</b><i>(optional)</i> Requires installation and configuration of emLogger",
