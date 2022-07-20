@@ -56,6 +56,14 @@ class InboundMessage
 
         // Return true if Message SID is present
         return !empty($this->getMessageSid());
+
+        // TODO: I do not know whether or not replies will come here with or without a pid
+
+    }
+
+    // Return reply or callback depending on message type
+    public function getMessageType() {
+        return empty($this->post['EventType']) ? 'reply' : 'callback';
     }
 
     public function getMessageSid () {

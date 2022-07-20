@@ -71,7 +71,7 @@
         },
         {
             "key": "from-number",
-            "name": "<b>From Number</b><br>Must be in e164 format (e.g. +16508675309 or +255121234567)",
+            "name": "<b>Twilio From Number</b><br>Must be in e164 format (<i>e.g.</i> +16508675309 or +255121234567) and must be properly configured with a What's App sender",
             "required": true,
             "type": "text"
         },
@@ -86,6 +86,12 @@
             "name": "<b>Ice Breaker Template Variables</b><br>Should your icebreaker include variables, you need to set their value(s) here.  The format is of a json-encoded array.  You cannot assume any event/instance context so do not use context-specific smart variables.  For example, 'Dear {{1}} - please click to view your {{2}} study messages' might be<br><code>[ \"[baseline_arm_1][first_name]\", \"SUPERMAN\" ]</code>",
             "required": false,
             "type": "text"
+        },
+        {
+            "key": "inbound-phone-field",
+            "name": "<b>Inbound Record Phone Field</b><br>This is the field in your project where you store the records What's App phone numbers.  It is used to match an inbound reply from a participant to the correct record.",
+            "required": false,
+            "type": "field-list"
         },
         {
 			"key": "enable-project-debug-logging",

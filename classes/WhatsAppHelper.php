@@ -83,12 +83,11 @@ class WhatsAppHelper
             // There isn't an existing message SID - probably a newly received message
             return false;
         } else {
-            // The factory query returns an array
-            // There should only be one entry for a SID - lets take the first just in case
+            // The factory query returns an array - we try to keep one log entry for messageSID so we
+            // will just take the first...
             /** @var Entity $entity */
             $entity = array_shift($results);
             return $entity;
-            // return $this->parseCallback();
         }
     }
 
@@ -113,10 +112,12 @@ class WhatsAppHelper
      * When a recipient responds to a SMS, it may open up a window to send any queued messages that errored
      * out because they were outside of the window.
      * @param $record_id
+     * @param $project_id
      * @return void
      */
-    public function getUndeliveredMessages($record_id) {
+    public function getUndeliveredMessages($record_id, $project_id) {
         // Step 1 - get all messages that are undelivered
+        xdebug_break();
         $factory = new EntityFactory();
         $entities = $factory->query('whats_app_message')
             ->condition('record_id', $record_id)
@@ -124,14 +125,10 @@ class WhatsAppHelper
             ->condition('source', "Undelivered Message", "!=")
             ->condition('template_id', NULL)
             ->condition('error', 63016)
+            ->condition('project_id', $project_id)
             ->orderBy('created')
             ->execute();
-
-        if ($entities) {
-            return $entities;
-        } else {
-            return false;
-        }
+        return empty($entities) ? false : $entities;
     }
 
 

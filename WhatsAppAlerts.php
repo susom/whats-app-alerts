@@ -35,9 +35,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
      */
     public function redcap_email( $to, $from, $subject, $message, $cc, $bcc, $fromName, $attachments ) {
         // Determine if this outbound email is intended to create a WhatsApp Message
-        $this->wah = new WhatsAppHelper($this);
-
-        if (!$wamd = $this->wah->parseEmailForWhatsAppMessageDefinition($message)) {
+        if (!$wamd = $this->getWAH()->parseEmailForWhatsAppMessageDefinition($message)) {
             // Just send email if not a what's app message
             return true;
         } else {
@@ -106,13 +104,13 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                 "from_number"   => $from_number,
                 "error"         => $error,
                 "date_sent"     => strtotime('now'),
-                "raw"           => $this->wah->appendRaw($wamd->getConfig())
+                "raw"           => $this->getWAH()->appendRaw($wamd->getConfig())
             ],
             // Merge in context
             $wamd->getMessageContext()->getContextAsArray()
         );
 
-        $logEntryId = $this->wah->logNewMessage($payload);
+        $logEntryId = $this->getWAH()->logNewMessage($payload);
 
         $this->emDebug("Created new Log Entry as " . $logEntryId);
 
@@ -130,11 +128,287 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
 
 
     /**
+     * Try to determine the valid project id based on the configured what's app number
+     * @param $whats_app_number
+     * @return array $projects
+     */
+    public function getProjectsByWhatsAppNumber($whats_app_number)
+    {
+        // Format number into just numerical portion
+        $to_digits = $this->formatNumber($whats_app_number, "");
+
+        // Get all projects configured
+        $projects = [];
+        foreach ($this->getProjectsWithModuleEnabled() as $local_pid) {
+            $pid_from_number = $this->getProjectSetting('from-number', $local_pid);
+            $pid_from_digits = $this->formatNumber($pid_from_number, "");
+            if ($to_digits == $pid_from_digits) {
+                $projects[] = $local_pid;
+            }
+        }
+        return $projects;
+    }
+
+
+    /**
+     * Look at each project and determine if any records contain the matching from_number
+     * @param $projects
+     * @param $from_number
+     * @return array    [ $project_id, $record, $event ]
+     */
+    public function filterProjectsBySender($projects, $from_number)
+    {
+        $from_digits = $this->formatNumber($from_number, '');
+        $matches=[];
+        foreach ($projects as $local_pid) {
+            $pid_phone_field = $this->getProjectSetting('inbound-phone-field', $local_pid);
+            $this->emDebug("Checking project $local_pid for records with $pid_phone_field that is similar to $from_number");
+            $result = $this->query(
+                "SELECT record, event_id, value from redcap_data where project_id = ? and field_name = ?",
+                [$local_pid, $pid_phone_field]
+            );
+            while ($row = $result->fetch_assoc()) {
+                $record_phone_digits = $this->formatNumber($row['value'], '');
+                if (!empty($record_phone_digits) && $from_digits == $record_phone_digits) {
+                    $this->emDebug("Found an inbound match: " . json_encode($row));
+                    // We have a match
+                    $matches[] = [
+                        "project_id" => $local_pid,
+                        "record_id"  => $row['record'],
+                        "event_id"   => $row['event_id']
+                    ];
+                }
+            }
+        }
+        return $matches;
+    }
+
+
+
+    /**
      * Handle an inbound message (both status callback and reply)
      * @return void
      * @throws Exception
      */
     public function processInboundMessage() {
+        try {
+            //xdebug_break();
+            if ($IM = new InboundMessage()) {
+
+                // Use a lock to keep things under control w/ races and a lot of inbound messages
+                $lock = $this->query("SELECT GET_LOCK(?,30)", $this->PREFIX)->fetch_array()[0];
+                if ($lock == 0) {
+                    $this->emError("Unable to obtain a lock for inbound message", $IM);
+                    exit("Unable to obtain lock for inbound message -- see logs");
+                }
+
+                if ($IM->getMessageType() == "reply") {
+                    $this->processInboundReply($IM);
+                }
+
+                if ($IM->getMessageType() == "callback") {
+                    // Process callback update -- do we have a project_id here?
+                    $this->emDebug("Callback from project: ",$_POST['pid'], $_POST['project_id']);
+                    $this->processInboundCallback($IM);
+                }
+            } else {
+                $this->emDebug("Invalid inbound message");
+            }
+        } catch (Exception $e) {
+            $this->emError("Exception on inbound message", $e->getMessage());
+        }
+    }
+
+    private function processInboundCallback($IM) {
+        $msid = $IM->getMessageSid();
+        $notes = [];
+
+        if ($entity = $this->getWAH()->getLogByMessageId($msid)) {
+            $id = $entity->getId();
+            $data = $entity->getData();
+            $status = $IM->getStatus();
+            $error = $IM->getErrorCode();
+            $icebreaker_needed = false;
+            $pid = $data['project_id'];
+
+            $payload = [];
+            if ($data['status'] == "undelivered" && $data['error'] == 63016 &&  // previous logged message values
+                $status == "sent"                                               // current message update
+            ) {
+                // You would think the order should be queued -> sent -> error/delivered -> read
+                // but in some cases, the error message arrives before the sent message.  So, if we already have an
+                // error and get a 'sent' status update, we are going to mostly ignore this.
+                // TODO: Log in raw that we ignored a sent update... add look at last raw ts to see if has been very little
+                // time to verify collision
+
+                $this->emDebug("Going to ignore a sent after undelivered update");
+                $notes[] = "Ignoring a status update from " . $data['status'] . " to $status - assuming incorrect order of callback messages";
+            } else {
+                // Update status and error messages
+                $payload['status'] = $status;
+                $payload['error'] = $error;
+            }
+
+            // Convert previous raw value to array
+            // TODO: Fix and add notes -- this is way too confusing/much data...
+            $existing_raw = json_decode(json_encode($data['raw']), true);
+            $new_raw = $IM->getRaw();
+            $diff = $this->getWAH()->diffLastRaw($existing_raw, $new_raw);
+            $payload['raw'] = $this->getWAH()->appendRaw($diff, $existing_raw);
+
+            $diff_summary = [];
+            foreach ($diff as $k => $v) $diff_summary[] = "$k = '$v'";
+
+            switch ($status) {
+                case "sent":
+                    $payload['date_sent'] = strtotime('now');
+                    break;
+                case "delivered":
+                    $payload['date_delivered'] = strtotime('now');
+                    break;
+                case "read":
+                    $payload['date_read'] = strtotime('now');
+                    break;
+                case "undelivered":
+                    // Message was undelivered
+                    if ($IM->isIceBreakerError()) {
+                        $template_id = $data['template_id'];
+                        $icebreaker_template_id = $this->getProjectSetting('icebreaker-template-id', $data['project_id']);
+                        // $this->emDebug($template_id, $icebreaker_template_id);
+                        if (!empty($template_id) && $template_id == $icebreaker_template_id) {
+                            // We don't trigger an icebreaker on a failed icebreaker to prevent a loop
+                            $this->emError("Detected rejected icebreaker message #" . $id);
+                        } else {
+                            $icebreaker_needed = true;
+                        }
+                    }
+                    break;
+                case "failed":
+                    $this->emDebug("Failed Delivery", $_POST);
+                    break;
+                default:
+                    $this->emError("Unhandled callback status: $status", $_POST);
+            }
+
+            if (!empty($error)) $payload['date_error'] = strtotime('now');
+
+            // Save the update
+            if ($entity->setData($payload)) {
+                if ($result = $entity->save()) {
+                    $this->emDebug("Updated Entity #" . $id . " - $status $error");
+                    \REDCap::logEvent(
+                        "[WhatsApp]<br>Message #" . $entity->getId() . " Status Update",
+                        implode(",\n", $diff_summary),
+                        "", $data['record_id'], $data['event_id'], $data['project_id']
+                    );
+
+                    if ($icebreaker_needed) {
+                        $record_id = $data['record_id'];
+                        $to_number = $data['to_number'];
+                        $this->sendIcebreakerMessage($record_id, $to_number);
+                    }
+
+                    return true;
+                } else {
+                    $this->emError("Error saving update", $payload, $_POST, $entity->getErrors());
+                }
+            } else {
+                $this->emDebug("Error setting payload", $payload, $entity->getErrors());
+            }
+        }
+        # something went wrong
+        return false;
+
+
+
+    }
+
+
+    /**
+     * Called from processInboundMessage - this method handles reply messages only
+     * @param $IM
+     * @return false|void
+     */
+    private function processInboundReply($IM) {
+
+        // We have a valid inbound message - see if the to number (e.g. What's App Project Number) is registered
+        // to any active projects on our server
+        $to_number = $IM->getToNumber();
+        $possible_projects = $this->getProjectsByWhatsAppNumber($to_number);
+        $this->emDebug($to_number . " is registered to the following projects: " . json_encode($possible_projects));
+
+        // Given a set of matching projects, lets try to identify participant records that match the sender's number
+        $from_number = $IM->getFromNumber();
+        $matches = $this->filterProjectsBySender($possible_projects, $from_number);
+
+        $payload = [
+            "message_sid"   => $IM->getMessageSid(),
+            "body"          => $IM->getBody(),
+            "to_number"     => $IM->getToNumber(),
+            "from_number"   => $from_number,
+            "date_received" => strtotime('now'),
+            "status"        => "received"
+            // "raw"           => $this->appendRaw([], $IM->getRaw()),
+        ];
+
+        if (empty($matches)) {
+            $this->emLog("Unable to identify a matching record for the reply from $from_number in projects " . implode(",", $possible_projects));
+            // TODO: We should still probably log the message to the table even if it isn't associated with a project or record
+            $logEntryId = $this->getWAH()->logNewMessage($payload);
+            foreach ($possible_projects as $project_id) {
+                \REDCap::logEvent(
+                    "[WhatsApp]<br>Unable to assign incoming message to record / project",
+                    "The sender's number, " . $from_number . ", was not found in this project.  See message #$logEntryId",
+                    "", "", "", $project_id
+                );
+            }
+            return false;
+        } else if(count($matches > 1)) {
+            $this->emLog("Found multiple potential records that match the inbound message from $from_number", $matches);
+            // \REDCap::logEvent(
+            //     "[WhatsApp]<br>Unable to assign incoming message to record",
+            //     "The sender's number, " . $IM->getFromNumber() . ", is used by " . $record_count . " records.  See message #$logEntryId",
+            //     "", "", "", $this->getProjectId()
+            // );
+        } else {
+            // Found just one match
+            $this->emDebug("Matched reply from $from_number to " . json_encode($matches));
+        }
+
+        // Log these messages (only log if we know the record/project)
+        foreach ($matches as $match) {
+            $record_id = $match['record_id'];
+            $project_id = $match['project_id'];
+            $this_payload = array_merge($payload, [
+                "record_id"     => $record_id,
+                "project_id"    => $project_id
+            ]);
+
+            if ($logEntryId = $this->getWAH()->logNewMessage($this_payload)) {
+                \REDCap::logEvent(
+                    "[WhatsApp]<br>Incoming message received",
+                    "New message from sender at " . $IM->getFromNumber() . " recorded as message #$logEntryId\n" . $IM->getBody(),
+                    "", $record_id, "", $project_id
+                );
+
+                // Since we received a reply from a person, we must assume we have an open 24 hour window
+                // Let's see if we have any undelivered messages
+                if ($entities = $this->getWAH()->getUndeliveredMessages($record_id, $project_id)) {
+                    $this->emDebug("Log ID $logEntryId: Found " . count($entities) . " undelivered messages for record $record_id in project $project_id");
+                    $this->sendUndeliveredMessages($entities);
+                } else {
+                    $this->emDebug("Log ID $logEntryId: No undelivered messages for record $record_id in project $project_id");
+                };
+            } else {
+                // Error occurred
+                $this->emError("Unable to save new IM", $this_payload);
+            }
+        }
+    }
+
+
+/*
+    public function processInboundMessageOld() {
         try {
             //xdebug_break();
             if ($IM = new InboundMessage()) {
@@ -145,14 +419,12 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                 $lock = $this->query("SELECT GET_LOCK(?,30)", $this->PREFIX)->fetch_array()[0];
                 if ($lock == 0) {
                     $this->emError("Unable to obtain a lock for inbound message", $IM);
-                    exit();
+                    exit("Unable to obtain lock for inbound message -- see logs");
                 }
-
-                $this->wah = new WhatsAppHelper($this);
 
                 $msid = $IM->getMessageSid();
 
-                if ($entity = $this->wah->getLogByMessageId($msid)) {
+                if ($entity = $this->getWAH()->getLogByMessageId($msid)) {
                     // This request is related to an existing sid -- likely a callback
                     $id = $entity->getId();
                     $data = $entity->getData();
@@ -172,8 +444,8 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                     // Convert previous value to array
                     $existing_raw = json_decode(json_encode($data['raw']),true);
                     $new_raw = $IM->getRaw();
-                    $diff = $this->wah->diffLastRaw($existing_raw, $new_raw);
-                    $payload['raw'] = $this->wah->appendRaw($diff, $existing_raw);
+                    $diff = $this->getWAH()->diffLastRaw($existing_raw, $new_raw);
+                    $payload['raw'] = $this->getWAH()->appendRaw($diff, $existing_raw);
 
                     $diff_summary = [];
                     foreach ($diff as $k=>$v) $diff_summary[] = "$k = '$v'";
@@ -243,7 +515,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                     // xdebug_break();
                     // Have we sent messages to this number before
                     $from_number = $IM->getFromNumber();
-                    $records = $this->wah->getRecordsByToNumber($from_number);
+                    $records = $this->getWAH()->getRecordsByToNumber($from_number);
                     $record_count = count($records);
 
                     if ($record_count == 1) {
@@ -272,7 +544,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                         "status"        => "received",
                         "record_id"     => $record_id
                     ];
-                    $logEntryId = $this->wah->logNewMessage($payload);
+                    $logEntryId = $this->getWAH()->logNewMessage($payload);
 
                     if ($logEntryId === false) {
                         // Error occurred
@@ -288,7 +560,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
 
                             // Since we received a reply from a person, we must assume we have an open 24 hour window
                             // Let's see if we have any undelivered messages
-                            if ($entities = $this->wah->getUndeliveredMessages($record_id)) {
+                            if ($entities = $this->getWAH()->getUndeliveredMessages($record_id)) {
                                 $this->emDebug("Found " . count($entities) . " undelivered messages for record " . $record_id);
                                 $this->sendUndeliveredMessages($entities);
                             } else {
@@ -318,6 +590,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
             $this->emError("Exception on inbound message", $e->getMessage());
         }
     }
+*/
 
     public function sendIcebreakerMessage($record_id, $to_number) {
         try {
@@ -427,7 +700,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
             ];
 
             $this->emDebug("Redelivery Config",$config);
-            $wamd = $this->wah->getMessageDefinitionFromConfig($config);
+            $wamd = $this->getWAH()->getMessageDefinitionFromConfig($config);
 
             // New message that will be used for redelivery
             if ($new_id = $this->sendMessage($wamd)) {
@@ -439,7 +712,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                 ];
 
                 // Update raw
-                $raw = $this->wah->appendRaw(
+                $raw = $this->getWAH()->appendRaw(
                     array_merge(
                         $update,
                         [
@@ -469,11 +742,9 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
 
     // TO BE DELETED
     public function testUndelivered() {
-        $this->wah = new WhatsAppHelper($this);
-
         $record_id = $_GET['record_id'];
         if ($record_id) {
-            $entities = $this->wah->getUndeliveredMessages($record_id);
+            $entities = $this->getWAH()->getUndeliveredMessages($record_id);
             echo "<pre>". print_r($entities,true) . "</pre>";
         }
 
@@ -505,6 +776,17 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
         return $this->Client;
     }
 
+    /**
+     * Get the Whats App Helper Object
+     * @return WhatsAppHelper
+     */
+    private function getWAH() {
+        if (empty($this->wah)) {
+            $this->wah = new WhatsAppHelper($this);
+        }
+        return $this->wah;
+    }
+
     public function getFromNumber()
     {
         if (! $this->settings_loaded) $this->loadSettings();
@@ -525,13 +807,13 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
      */
     public function checkForOverrideUrl($url): string
     {
-        $overrideUrl = $this->getProjectSetting('override-url');
+        $overrideUrl = trim($this->getSystemSetting('override-url'));
         if (!empty($overrideUrl)) {
             // Make sure callback_override ends with a slash
             if (! str_ends_with($overrideUrl,'/')) $overrideUrl .= "/";
             // Substitute
             $new_url = str_replace(APP_PATH_WEBROOT_FULL, $overrideUrl, $url);
-            // $this->emDebug("Overriding url $url with $new_url");
+            $this->emDebug("Overriding url $url with $new_url");
         } else {
             $new_url = $url;
         }
@@ -548,7 +830,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
         // Strip anything but numbers and add a plus
         $clean_number = preg_replace('/[^\d]/', '', $number);
 
-        // Append a 1 to some numbers
+        // Append a 1 to 10 digit numbers
         if (strlen($clean_number) === 10 && left($clean_number,1) != "1") {
             $clean_number = "1".$clean_number;
         }
