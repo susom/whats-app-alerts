@@ -8,4 +8,4 @@ namespace Stanford\WhatsAppAlerts;
 
 $module->emDebug("INBOUND POST: " . json_encode($_POST));
 
-$module->processInboundMessage();
+$module->processInboundMessage("inbound");

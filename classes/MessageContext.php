@@ -171,7 +171,7 @@ class MessageContext {
      */
     public function getSourceId()
     {
-        return $this->source_id;
+        return strval($this->source_id);
     }
 
     /**
@@ -203,7 +203,7 @@ class MessageContext {
      */
     public function getInstance()
     {
-        return $this->instance;
+        return strval($this->instance);
     }
 
     /**

@@ -21,6 +21,7 @@ class WhatsAppHelper
         $this->module    = $module;
     }
 
+
     /**
      * Create a new MESSAGE DEFINITION from a config object
      * @param $config
@@ -123,9 +124,9 @@ class WhatsAppHelper
             ->condition('record_id', $record_id)
             ->condition('status', "undelivered")
             ->condition('source', "Undelivered Message", "!=")
-            ->condition('template_id', NULL)
+//            ->condition('template_id', NULL)
             ->condition('error', 63016)
-            ->condition('project_id', $project_id)
+            ->condition('project_id', intval($project_id))
             ->orderBy('created')
             ->execute();
         return empty($entities) ? false : $entities;

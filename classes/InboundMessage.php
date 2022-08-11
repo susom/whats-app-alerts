@@ -62,9 +62,9 @@ class InboundMessage
     }
 
     // Return reply or callback depending on message type
-    public function getMessageType() {
-        return empty($this->post['EventType']) ? 'reply' : 'callback';
-    }
+//    public function getMessageType() {
+//        return empty($this->post['EventType']) ? 'reply' : 'callback';
+//    }
 
     public function getMessageSid () {
         return $this->post['MessageSid'] ?? null;
@@ -83,7 +83,7 @@ class InboundMessage
     }
 
     public function getBody() {
-        return $this->post['body'] ?? '';
+        return $this->post['Body'] ?? '';
     }
 
     public function getFromNumber() {

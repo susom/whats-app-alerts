@@ -4,7 +4,7 @@ namespace Stanford\WhatsAppAlerts;
 
 $module->emDebug("In Status Callback");
 
-$wam = new WhatsAppHelper($module);
+//$wam = new WhatsAppHelper($module);
 // $wam->updateLogStatusCallback();
 $module->emDebug(__FILE__);
-$wam->processInboundMessage();
+$module->processInboundMessage("callback");

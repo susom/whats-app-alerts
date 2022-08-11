@@ -36,7 +36,7 @@ loadJS('Libraries/clipboard.js');
 
     <div class="card-body">
         <p>The following url should be set in Twilio for inbound requests for all phone numbers associated with this project:</p>
-        <input id="inbound_url" value="<?php echo $module->getInboundUrl() ?>" onclick="this.select();" readonly="readonly" class="staticInput p-2" style="width:80%"/>
+        <input id="inbound_url" value="<?php echo $module->getCallbackUrl() ?>" onclick="this.select();" readonly="readonly" class="staticInput p-2" style="width:80%"/>
         <button class="btn btn-defaultrc btn-clipboard" onclick="copyUrlToClipboard(this);" title="Copy to clipboard" data-clipboard-target="#inbound_url" style="padding:3px 8px 3px 6px;"><i class="fas fa-paste"></i></button>
     </div>
 </div>

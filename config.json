@@ -27,8 +27,14 @@
 	"enable-every-page-hooks-on-system-pages": false,
 
     "no-auth-pages": [
-        "pages/status_callback",
-        "pages/inbound"
+        "pages/callback",
+        "pages/inbound",
+        "pages/ajax_handler.php"
+    ],
+    "no-csrf-pages": [
+        "pages/callback",
+        "pages/inbound",
+        "pages/conversation.php"
     ],
 
 	"links": {
@@ -43,6 +49,12 @@
                 "name": "What's App Messages",
                 "icon": "fab fa-whatsapp",
                 "url": "pages/message_list.php",
+                "show-header-and-footer": true
+            },
+            {
+                "name": "What's App Conversation Feed",
+                "icon": "fab fa-whatsapp",
+                "url": "pages/conversation.php",
                 "show-header-and-footer": true
             }
         ],

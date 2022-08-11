@@ -34,4 +34,6 @@ TODO: Document better the next time someone goes through this process... It was 
 
 
 
-
+## XDebug configuration
+1. Each time refreshing ngrok urls, you must update path mappings in PHPStorm for Xdebug
+2. Add /var/www/html as the path mapping to the www folder on the server to the new entry

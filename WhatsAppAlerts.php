@@ -67,7 +67,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
         $body       = $wamd->getBody();
 
         $from_number    = $this->formatNumber($this->getFromNumber());
-        $callback_url   = $this->getInboundUrl();
+        $callback_url   = $this->getCallbackUrl();
         $client         = $this->getClient();
 
         $trans = $client->messages->create($to_number,
@@ -104,6 +104,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                 "from_number"   => $from_number,
                 "error"         => $error,
                 "date_sent"     => strtotime('now'),
+                "project_id"    => $this->getProjectId(),
                 "raw"           => $this->getWAH()->appendRaw($wamd->getConfig())
             ],
             // Merge in context
@@ -190,7 +191,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
      * @return void
      * @throws Exception
      */
-    public function processInboundMessage() {
+    public function processInboundMessage($type) {
         try {
             //xdebug_break();
             if ($IM = new InboundMessage()) {
@@ -202,13 +203,11 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                     exit("Unable to obtain lock for inbound message -- see logs");
                 }
 
-                if ($IM->getMessageType() == "reply") {
+                if ($type == "inbound") { // User has responded to a message
                     $this->processInboundReply($IM);
-                }
-
-                if ($IM->getMessageType() == "callback") {
-                    // Process callback update -- do we have a project_id here?
-                    $this->emDebug("Callback from project: ",$_POST['pid'], $_POST['project_id']);
+                } elseif ($type == "callback") {
+                    // Process callback update :: read/
+                    $this->emDebug("Callback from project: ",$_GET['pid'], $_GET['project_id']);
                     $this->processInboundCallback($IM);
                 }
             } else {
@@ -218,6 +217,8 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
             $this->emError("Exception on inbound message", $e->getMessage());
         }
     }
+
+
 
     private function processInboundCallback($IM) {
         $msid = $IM->getMessageSid();
@@ -229,7 +230,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
             $status = $IM->getStatus();
             $error = $IM->getErrorCode();
             $icebreaker_needed = false;
-            $pid = $data['project_id'];
+
 
             $payload = [];
             if ($data['status'] == "undelivered" && $data['error'] == 63016 &&  // previous logged message values
@@ -255,6 +256,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
             $new_raw = $IM->getRaw();
             $diff = $this->getWAH()->diffLastRaw($existing_raw, $new_raw);
             $payload['raw'] = $this->getWAH()->appendRaw($diff, $existing_raw);
+            $payload['project_id'] = $_GET['pid'];
 
             $diff_summary = [];
             foreach ($diff as $k => $v) $diff_summary[] = "$k = '$v'";
@@ -347,14 +349,14 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
             "to_number"     => $IM->getToNumber(),
             "from_number"   => $from_number,
             "date_received" => strtotime('now'),
-            "status"        => "received"
-            // "raw"           => $this->appendRaw([], $IM->getRaw()),
+            "status"        => "received",
+            "source"        => "Inbound message",
+            "raw"           => $this->getWAH()->appendRaw($IM->getRaw(), [])
         ];
-
+        $logEntryId = $this->getWAH()->logNewMessage($payload);
         if (empty($matches)) {
             $this->emLog("Unable to identify a matching record for the reply from $from_number in projects " . implode(",", $possible_projects));
             // TODO: We should still probably log the message to the table even if it isn't associated with a project or record
-            $logEntryId = $this->getWAH()->logNewMessage($payload);
             foreach ($possible_projects as $project_id) {
                 \REDCap::logEvent(
                     "[WhatsApp]<br>Unable to assign incoming message to record / project",
@@ -363,26 +365,24 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                 );
             }
             return false;
-        } else if(count($matches > 1)) {
+        } else if(count($matches) > 1) { // multiple projects exist with the same
             $this->emLog("Found multiple potential records that match the inbound message from $from_number", $matches);
-            // \REDCap::logEvent(
-            //     "[WhatsApp]<br>Unable to assign incoming message to record",
-            //     "The sender's number, " . $IM->getFromNumber() . ", is used by " . $record_count . " records.  See message #$logEntryId",
-            //     "", "", "", $this->getProjectId()
-            // );
         } else {
             // Found just one match
             $this->emDebug("Matched reply from $from_number to " . json_encode($matches));
         }
 
+        $payload['raw']['matches'] = $matches;
         // Log these messages (only log if we know the record/project)
         foreach ($matches as $match) {
             $record_id = $match['record_id'];
             $project_id = $match['project_id'];
             $this_payload = array_merge($payload, [
                 "record_id"     => $record_id,
-                "project_id"    => $project_id
+                "project_id"    => $project_id,
             ]);
+            $this->settings_loaded=false;
+            $_GET['pid'] = $project_id; //For settings, get From number
 
             if ($logEntryId = $this->getWAH()->logNewMessage($this_payload)) {
                 \REDCap::logEvent(
@@ -670,6 +670,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
             $record_id = $data['record_id'];
             $original_body = $data['body'];
             $to_number = $data['to_number'];
+            $project_id = $data['project_id'];
 
             // Get Age
             $created_date = $entity->getCreationTimestamp();
@@ -692,9 +693,10 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                 "number" => $to_number,
                 "body" => $new_body,
                 "context" => [
-                    "source"    => "Undelivered Message",
+                    "source"    => "Redelivered Message",
                     "source_id" => $id,
-                    "record_id" => $record_id
+                    "record_id" => $record_id,
+                    "project_id" => $project_id
                 ],
                 "REDCap Message" => "This is a redelivery of message #$id - " . $data['message_sid']
             ];
@@ -750,10 +752,11 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
 
     }
 
-    private function loadSettings() {
-        $this->account_sid = $this->getProjectSetting('account-sid');
-        $this->token = $this->getProjectSetting('token');
-        $this->from_number = $this->getProjectSetting('from-number');
+    private function loadSettings($project_id = "") {
+        if(empty($project_id)) $project_id = $this->getProjectId();
+        $this->account_sid = $this->getProjectSetting('account-sid', $project_id);
+        $this->token = $this->getProjectSetting('token', $project_id);
+        $this->from_number = $this->getProjectSetting('from-number', $project_id);
         $this->settings_loaded = true;
     }
 
@@ -793,9 +796,9 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
         return $this->from_number;
     }
 
-    public function getInboundUrl(): string
+    public function getCallbackUrl(): string
     {
-        $url = $this->getUrl('pages/inbound.php', true, true);
+        $url = $this->getUrl('pages/callback.php', true, true);
         return $this->checkForOverrideUrl($url);
     }
 
@@ -837,6 +840,82 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
         return $prefix . $clean_number;
     }
 
+    /**
+     * Injects javascript files and any necessary data necessary before page load
+     * @return void
+     */
+    public function injectJavascript()
+    {
+        try {
+
+            $jsFilePath = $this->getUrl('scripts/inject.js');
+            $ajaxFilePath = json_encode($this->getUrl('pages/ajax_handler.php'));
+            $csrfToken = json_encode($this->getCSRFToken());
+            print "<script type='module' src=$jsFilePath></script>";
+            print "<script type='text/javascript'>var ajaxUrl = $ajaxFilePath; var csrfToken = $csrfToken</script>";
+
+
+        } catch (\Exception $e) {
+            \REDCap::logEvent("Error injecting js: $e");
+            $this->emError($e);
+        }
+    }
+    public function validatePhoneNumber($phoneNumber)
+    {
+        $possiblePhoneNumbers = json_decode(\REDCap::getData('json', NULL, array('phone')));
+        foreach($possiblePhoneNumbers as $number){
+            if($number->phone === $phoneNumber)
+                return $number->phone;
+        }
+        return NULL;
+    }
+    public function getMessagesByPhoneNumber($phoneNumber)
+    {
+        $searchPhone = $this->validatePhoneNumber($phoneNumber);
+        $formatted = $this->formatNumber($searchPhone);
+        if($searchPhone) {
+            $factory = new EntityFactory();
+            $resultsFrom = $factory->query('whats_app_message')
+                ->condition('project_id', PROJECT_ID)
+                ->condition('from_number', $formatted)
+                ->orderBy('updated')
+                ->execute();
+            $resultsTo = $factory->query('whats_app_message')
+                ->condition('project_id', PROJECT_ID)
+                ->condition('to_number', $formatted)
+                ->orderBy('updated')
+                ->execute();
+
+            $enc = array_merge($this->parseFactoryData($resultsFrom), $this->parseFactoryData($resultsTo));
+
+            return json_encode($enc);
+        } else {
+            \REDCap::logEvent("Phone number passed via ajax does not match entry in database");
+            $this->emError('Phone number passed via ajax does not match entry in database');
+        }
+
+    }
+
+    public function parseFactoryData($results)
+    {
+        $enc = [];
+
+        foreach($results as $index => $message) {
+            $obj = [];
+            $obj['body'] = $message->getDataValue('body');
+            $obj['date_sent'] = $message->getDataValue('date_sent');
+            $obj['date_received'] = $message->getDataValue('date_received');
+            $obj['to_number'] = $message->getDataValue('to_number');
+            $obj['from_number'] = $message->getDataValue('from_number');
+            $obj['updated'] = $message->getDataValue('updated');
+            $obj['source'] = $message->getDataValue('source');
+            $enc[] = $obj;
+        }
+        return $enc;
+    }
+    public function fetchPhoneNumbers() {
+        return json_decode(\REDCap::getData('json', NULL, array('phone')));
+    }
 
     /************ REDCAP ENTTIY SECTION ********************/
     function redcap_module_system_enable($version) {
@@ -853,6 +932,9 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
             // Exits gracefully when REDCap Entity is not enabled.
             return;
         }
+
+//        if($_GET['page'] === 'pages/conversation')
+//            $this->injectJavascript();
 
         // ABM: I DONT THINK THIS IS NEEDED AS THIS ONLY WILL BE RUN IN PROJECT CONTEXT???
         // // Insert JS for control center page
