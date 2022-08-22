@@ -391,23 +391,25 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                 if ($logEntryId = $this->getWAH()->logNewMessage($this_payload)) {
                     $this->emDebug("Log Entry ID:", $logEntryId);
 
+                    $unsent_entities = $this->getWAH()->getUndeliveredMessages($record_id,$project_id);
+
                     $prev_pid = $_GET['pid'];
-                    $_GET['pid'] = $project_id; //For settings, get From number
+                    $_GET['pid'] = $project_id; //For settings, get From number and to send undelivered messages
                     \REDCap::logEvent(
                         "[WhatsApp]<br>Incoming message received",
                         "New message from sender at " . $IM->getFromNumber() . " recorded as message #$logEntryId\n" . $IM->getBody(),
                         "", $record_id, "", $project_id
                     );
-                    $_GET['pid'] = $prev_pid;
 
                     // Since we received a reply from a person, we must assume we have an open 24 hour window
                     // Let's see if we have any undelivered messages
-                    if ($entities = $this->getWAH()->getUndeliveredMessages($record_id, $project_id)) {
-                        $this->emDebug("Log ID $logEntryId: Found " . count($entities) . " undelivered messages for record $record_id in project $project_id");
-                        $this->sendUndeliveredMessages($entities);
+                    if ($unsent_entities) {
+                        $this->emDebug("Log ID $logEntryId: Found " . count($unsent_entities) . " undelivered messages for record $record_id in project $project_id");
+                        $this->sendUndeliveredMessages($unsent_entities);
                     } else {
                         $this->emDebug("Log ID $logEntryId: No undelivered messages for record $record_id in project $project_id");
                     };
+                    $_GET['pid'] = $prev_pid;
                 } else {
                     // Error occurred
                     $this->emError("Unable to save new IM", $this_payload);
