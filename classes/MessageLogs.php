@@ -31,8 +31,15 @@ class MessageLogs extends Entity
                 $value = json_decode($value);
             }
             return $value;
+        }elseif(isset($this->$key)){ //Properties not in data, id, updated, created columns
+            $value = $this->$key;
+            if (is_string($value)) {
+                $value = json_decode($value);
+            }
+            return $value;
         } else {
-            throw new Exception("The property $key is not defined.");
+            return null;
+//            throw new Exception("The property $key is not defined.");
         }
     }
 

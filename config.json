@@ -1,14 +1,9 @@
 {
 	"name": "WhatsAppAlerts",
-
 	"namespace": "Stanford\\WhatsAppAlerts",
-
 	"description": "Send Alerts and Notifications to participants using What's App",
-
 	"documentation": "README.md",
-
-    "framework-version": 7,
-
+    "framework-version": 9,
 	"authors": [
 		{
 			"name": "Andrew Martin",
@@ -16,8 +11,8 @@
 			"institution": "Stanford University"
 		},
         {
-            "name": "Ryan Valentine",
-            "email": "rval@stanford.edu",
+            "name": "Jordan Schultz",
+            "email": "jmschult@stanford.edu",
             "institution": "Stanford University"
         }
 
@@ -32,18 +27,18 @@
 	"enable-every-page-hooks-on-system-pages": false,
 
     "no-auth-pages": [
-        "pages/statusCallback",
-        "pages/inbound"
+        "pages/callback",
+        "pages/inbound",
+        "pages/ajax_handler.php"
+    ],
+    "no-csrf-pages": [
+        "pages/callback",
+        "pages/inbound",
+        "pages/conversation.php"
     ],
 
 	"links": {
 		"project": [
-            {
-                "name": "What's App",
-                "icon": "fab fa-whatsapp",
-                "url": "pages/info.php",
-                "show-header-and-footer": true
-            },
             {
                 "name": "What's App Templates",
                 "icon": "fab fa-whatsapp",
@@ -55,11 +50,22 @@
                 "icon": "fab fa-whatsapp",
                 "url": "pages/message_list.php",
                 "show-header-and-footer": true
+            },
+            {
+                "name": "What's App Conversation Feed",
+                "icon": "fab fa-whatsapp",
+                "url": "pages/conversation.php",
+                "show-header-and-footer": true
             }
         ],
 		"control-center": [
-
-		]
+            {
+                "name": "What's App Information",
+                "icon": "fab fa-whatsapp",
+                "url": "pages/info.php",
+                "show-header-and-footer": true
+            }
+        ]
 	},
 
 	"project-settings": [
@@ -77,7 +83,7 @@
         },
         {
             "key": "from-number",
-            "name": "<b>From Number</b><br>Must be in e164 format (e.g. +16508675309 or +255121234567)",
+            "name": "<b>Twilio From Number</b><br>Must be in e164 format (<i>e.g.</i> +16508675309 or +255121234567) and must be properly configured with a What's App sender",
             "required": true,
             "type": "text"
         },
@@ -94,10 +100,10 @@
             "type": "text"
         },
         {
-            "key": "override-url",
-            "name": "<b>Override Url</b><br>For debugging purposes, you can replace your redcap url with a custom url (e.g. ngrok)",
+            "key": "inbound-phone-field",
+            "name": "<b>Inbound Record Phone Field</b><br>This is the field in your project where you store the records What's App phone numbers.  It is used to match an inbound reply from a participant to the correct record.",
             "required": false,
-            "type": "text"
+            "type": "field-list"
         },
         {
 			"key": "enable-project-debug-logging",
@@ -109,6 +115,12 @@
 
 
 	"system-settings": [
+        {
+            "key": "override-url",
+            "name": "<b>Override Inbound Url</b><br>For debugging purposes, you can replace your base redcap url with a custom url (<i>e.g.</i> for ngrok you might use <code>http://1.2.3.4.ngrok.io</code>)",
+            "required": false,
+            "type": "text"
+        },
 		{
 			"key": "enable-system-debug-logging",
 			"name": "<b>Enable Debug Logging (system-wide)</b><i>(optional)</i> Requires installation and configuration of emLogger",
