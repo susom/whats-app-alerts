@@ -807,6 +807,12 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
         return $this->checkForOverrideUrl($url);
     }
 
+    public function getInboundUrl(): string
+    {
+        $url = $this->getUrl('pages/inbound.php', true, true);
+        return $this->checkForOverrideUrl($url);
+    }
+
 
     /**
      * Fix callback/internal urls for dev purposes, e.g. NGROK.
