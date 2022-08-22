@@ -121,8 +121,10 @@ class WhatsAppHelper
      */
     public function getUndeliveredMessages($record_id, $project_id) {
         // Step 1 - get all messages that are undelivered
-        xdebug_break();
+        // xdebug_break();
+        $this->module->emDebug("About to ask for factory");
         $factory = new EntityFactory();
+        $this->module->emDebug("Got a factory");
         $entities = $factory->query('whats_app_message')
             ->condition('record_id', $record_id)
             ->condition('status', "undelivered")
@@ -132,6 +134,7 @@ class WhatsAppHelper
             ->condition('project_id', intval($project_id))
             ->orderBy('created')
             ->execute();
+        $this->module->emDebug("Got entities: " . count($entities));
         return empty($entities) ? false : $entities;
     }
 

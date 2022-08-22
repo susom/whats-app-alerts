@@ -219,7 +219,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
     }
 
 
-
+    // An update to an existing message SID
     private function processInboundCallback($IM) {
         $msid = $IM->getMessageSid();
         $notes = [];
@@ -391,13 +391,14 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                 if ($logEntryId = $this->getWAH()->logNewMessage($this_payload)) {
                     $this->emDebug("Log Entry ID:", $logEntryId);
 
+                    $prev_pid = $_GET['pid'];
                     $_GET['pid'] = $project_id; //For settings, get From number
-
                     \REDCap::logEvent(
                         "[WhatsApp]<br>Incoming message received",
                         "New message from sender at " . $IM->getFromNumber() . " recorded as message #$logEntryId\n" . $IM->getBody(),
                         "", $record_id, "", $project_id
                     );
+                    $_GET['pid'] = $prev_pid;
 
                     // Since we received a reply from a person, we must assume we have an open 24 hour window
                     // Let's see if we have any undelivered messages
