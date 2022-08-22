@@ -387,27 +387,35 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
 
             $this->emDebug("About to process ", $this_payload);
 
-            if ($logEntryId = $this->getWAH()->logNewMessage($this_payload)) {
-                $this->emDebug("Log Entry ID:", $logEntryId);
+            try {
 
-                \REDCap::logEvent(
-                    "[WhatsApp]<br>Incoming message received",
-                    "New message from sender at " . $IM->getFromNumber() . " recorded as message #$logEntryId\n" . $IM->getBody(),
-                    "", $record_id, "", $project_id
-                );
+                if ($logEntryId = $this->getWAH()->logNewMessage($this_payload)) {
+                    $this->emDebug("Log Entry ID:", $logEntryId);
 
-                // Since we received a reply from a person, we must assume we have an open 24 hour window
-                // Let's see if we have any undelivered messages
-                if ($entities = $this->getWAH()->getUndeliveredMessages($record_id, $project_id)) {
-                    $this->emDebug("Log ID $logEntryId: Found " . count($entities) . " undelivered messages for record $record_id in project $project_id");
-                    $this->sendUndeliveredMessages($entities);
+                    \REDCap::logEvent(
+                        "[WhatsApp]<br>Incoming message received",
+                        "New message from sender at " . $IM->getFromNumber() . " recorded as message #$logEntryId\n" . $IM->getBody(),
+                        "", $record_id, "", $project_id
+                    );
+
+                    // Since we received a reply from a person, we must assume we have an open 24 hour window
+                    // Let's see if we have any undelivered messages
+                    if ($entities = $this->getWAH()->getUndeliveredMessages($record_id, $project_id)) {
+                        $this->emDebug("Log ID $logEntryId: Found " . count($entities) . " undelivered messages for record $record_id in project $project_id");
+                        $this->sendUndeliveredMessages($entities);
+                    } else {
+                        $this->emDebug("Log ID $logEntryId: No undelivered messages for record $record_id in project $project_id");
+                    };
                 } else {
-                    $this->emDebug("Log ID $logEntryId: No undelivered messages for record $record_id in project $project_id");
-                };
-            } else {
-                // Error occurred
-                $this->emError("Unable to save new IM", $this_payload);
+                    // Error occurred
+                    $this->emError("Unable to save new IM", $this_payload);
+                }
+
+            } catch (\Exception $e) {
+                $this->emError("Caught Exception:" . $e->getMessage(), $e->getTraceAsString());
             }
+
+
         }
     }
 

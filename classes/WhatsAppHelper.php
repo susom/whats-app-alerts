@@ -53,6 +53,7 @@ class WhatsAppHelper
      * @return mixed
      */
     public function logNewMessage($payload) {
+        $this->module->emDebug("About to get a factory");
         $factory = new EntityFactory();
         $this->module->emDebug("Got a new factory");
         // $payload = $this->getPayload();
