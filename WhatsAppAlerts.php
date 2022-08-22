@@ -353,10 +353,11 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
             "source"        => "Inbound message",
             "raw"           => $this->getWAH()->appendRaw($IM->getRaw(), [])
         ];
-        $logEntryId = $this->getWAH()->logNewMessage($payload);
+
         if (empty($matches)) {
             $this->emLog("Unable to identify a matching record for the reply from $from_number in projects " . implode(",", $possible_projects));
             // TODO: We should still probably log the message to the table even if it isn't associated with a project or record
+            $logEntryId = $this->getWAH()->logNewMessage($payload);
             foreach ($possible_projects as $project_id) {
                 \REDCap::logEvent(
                     "[WhatsApp]<br>Unable to assign incoming message to record / project",
