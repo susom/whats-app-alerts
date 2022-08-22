@@ -383,7 +383,6 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                 "project_id"    => $project_id,
             ]);
             $this->settings_loaded=false;
-            $_GET['pid'] = $project_id; //For settings, get From number
 
             $this->emDebug("About to process ", $this_payload);
 
@@ -391,6 +390,8 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
 
                 if ($logEntryId = $this->getWAH()->logNewMessage($this_payload)) {
                     $this->emDebug("Log Entry ID:", $logEntryId);
+
+                    $_GET['pid'] = $project_id; //For settings, get From number
 
                     \REDCap::logEvent(
                         "[WhatsApp]<br>Incoming message received",
