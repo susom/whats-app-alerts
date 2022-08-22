@@ -384,7 +384,11 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
             $this->settings_loaded=false;
             $_GET['pid'] = $project_id; //For settings, get From number
 
+            $this->emDebug("About to process ", $this_payload);
+
             if ($logEntryId = $this->getWAH()->logNewMessage($this_payload)) {
+                $this->emDebug("Log Entry ID:", $logEntryId);
+
                 \REDCap::logEvent(
                     "[WhatsApp]<br>Incoming message received",
                     "New message from sender at " . $IM->getFromNumber() . " recorded as message #$logEntryId\n" . $IM->getBody(),
