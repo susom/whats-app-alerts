@@ -250,8 +250,6 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                 $payload['error'] = $error;
             }
 
-            // Convert previous raw value to array
-            // TODO: Fix and add notes -- this is way too confusing/much data...
             $existing_raw = json_decode(json_encode($data['raw']), true);
             $new_raw = $IM->getRaw();
             $diff = $this->getWAH()->diffLastRaw($existing_raw, $new_raw);

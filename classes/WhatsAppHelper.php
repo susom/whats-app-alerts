@@ -164,17 +164,22 @@ class WhatsAppHelper
         if (empty($old_raw)) {
             return $new_raw;
         } else {
-            $last_raw_entry = end($old_raw);
-            $this->module->emDebug("Last Raw: " . json_encode($last_raw_entry));
+            if(count($old_raw) > 1) {
+                $base_raw_entry = current($old_raw); //Advance pointer to second message for comparison on each update
+                $base_raw_entry = next($old_raw);
+            } else {
+                $base_raw_entry = end($old_raw);
+            }
+
+            $this->module->emDebug("Base Raw entry for comparison: " . json_encode($base_raw_entry));
             $diff = [];
             foreach ($new_raw as $k => $v) {
-                if (!isset($last_raw_entry[$k]) || $last_raw_entry[$k] !== $v) {
+                if (!isset($base_raw_entry[$k]) || $base_raw_entry[$k] !== $v) {
                     $diff[$k] = $v;
                 }
             }
             $this->module->emDebug("Diff: " . json_encode($diff));
             return $diff;
-
         }
     }
 
