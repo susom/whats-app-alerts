@@ -305,7 +305,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                     if ($icebreaker_needed) {
                         $record_id = $data['record_id'];
                         $to_number = $data['to_number'];
-                        $this->sendIcebreakerMessage($record_id, $to_number);
+                        $this->sendIcebreakerMessage($record_id, $to_number, $data);
                     }
 
                     return true;
@@ -607,7 +607,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
     }
 */
 
-    public function sendIcebreakerMessage($record_id, $to_number) {
+    public function sendIcebreakerMessage($record_id, $to_number, $data) {
         try {
             $icebreaker_template       = $this->getProjectSetting('icebreaker-template-id');
             $icebreaker_variables_json = $this->getProjectSetting('icebreaker-variables');
@@ -633,8 +633,15 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                 "variables" => $variables,
                 "number" => $to_number,
                 "context" => [
-                    "record_id" => $record_id
-                ]
+                    "record_id" => $record_id,
+                    "source"=> $data["source"],
+                    "source_id"=> $data["source_id"],
+                    "event_name"=> $data["event_name"],
+                    "event_id"=> $data["event_id"],
+                    "instance"=> $data["instance"]
+                ],
+
+
                 // "REDCap Message" => "Triggered by failed message " . $message_id
             ];
 
