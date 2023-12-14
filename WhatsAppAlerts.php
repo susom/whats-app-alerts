@@ -163,10 +163,12 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
         $matches=[];
         foreach ($projects as $local_pid) {
             $pid_phone_field = $this->getProjectSetting('inbound-phone-field', $local_pid);
+            $data_table = method_exists('\REDCap', 'getDataTable') ? \REDCap::getDataTable($local_pid) : "redcap_data";
+
             $this->emDebug("Checking project $local_pid for records with $pid_phone_field that is similar to $from_number");
             $result = $this->query(
-                "SELECT record, event_id, value from redcap_data where project_id = ? and field_name = ?",
-                [$local_pid, $pid_phone_field]
+                "SELECT record, event_id, value from ? where project_id = ? and field_name = ?",
+                [$data_table, $local_pid, $pid_phone_field]
             );
             while ($row = $result->fetch_assoc()) {
                 $record_phone_digits = $this->formatNumber($row['value'], '');
