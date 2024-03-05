@@ -159,6 +159,7 @@ class WhatsAppMessageDefinition
         $junk = [
             "<p>",
             "<br />",
+            "<br>",
             "</p>"
         ];
         // Remove HTML tags inserted by UI
