@@ -35,6 +35,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
      */
     public function redcap_email( $to, $from, $subject, $message, $cc, $bcc, $fromName, $attachments ) {
         // Determine if this outbound email is intended to create a WhatsApp Message
+        $this->emLog("Alert triggered", $message);
         if (!$wamd = $this->getWAH()->parseEmailForWhatsAppMessageDefinition($message)) {
             // Just send email if not a what's app message
             return true;
@@ -62,69 +63,74 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
      * @throws \Twilio\Exceptions\TwilioException
      */
     public function sendMessage($wamd) {
+        try {
+            $this->emLog($wamd);
+            $to_number  = $this->formatNumber($wamd->getToNumber());
+            $body       = $wamd->getBody();
 
-        $to_number  = $this->formatNumber($wamd->getToNumber());
-        $body       = $wamd->getBody();
+            $from_number    = $this->formatNumber($this->getFromNumber());
+            $callback_url   = $this->getCallbackUrl();
+            $client         = $this->getClient();
 
-        $from_number    = $this->formatNumber($this->getFromNumber());
-        $callback_url   = $this->getCallbackUrl();
-        $client         = $this->getClient();
-
-        $trans = $client->messages->create($to_number,
-            [
-                "from" => $from_number,
-                "body" => $body,
-                "statusCallback" => $callback_url
-            ]
-        );
-
-        if (!empty($trans->errors)) {
-            $this->emError("Error sending message: ",
-                $trans->errors,
-                $trans->errorCode,
-                $trans->errorMessage
+            $trans = $client->messages->create($to_number,
+                [
+                    "from" => $from_number,
+                    "body" => $body,
+                    "statusCallback" => $callback_url
+                ]
             );
+
+            if (!empty($trans->errors)) {
+                $this->emError("Error sending message: ",
+                    $trans->errors,
+                    $trans->errorCode,
+                    $trans->errorMessage
+                );
+            }
+
+            # Record results
+            $status = $trans->status   ?? "";
+            $error = $trans->errorCode ?? "";
+            $message_sid = $trans->sid ?? "";
+            $this->emDebug("Message $status with sid $message_sid sent");
+
+            // Log the new message
+            $payload = array_merge(
+            // Message details
+                [
+                    "message_sid"   => $message_sid,
+                    "template"      => $wamd->getTemplate(),
+                    "template_id"   => $wamd->getTemplateId(),
+                    "body"          => $body,
+                    "to_number"     => $to_number,
+                    "from_number"   => $from_number,
+                    "error"         => $error,
+                    "date_sent"     => strtotime('now'),
+                    "project_id"    => $this->getProjectId(),
+                    "raw"           => $this->getWAH()->appendRaw($wamd->getConfig())
+                ],
+                // Merge in context
+                $wamd->getMessageContext()->getContextAsArray()
+            );
+
+            $logEntryId = $this->getWAH()->logNewMessage($payload);
+
+            $this->emDebug("Created new Log Entry as " . $logEntryId);
+
+            \REDCap::logEvent(
+                "[WhatsApp]<br>Message #" . $logEntryId . " Created",
+                "sid: $message_sid, status $status",
+                "",
+                $wamd->getMessageContext()->getRecordId(),
+                $wamd->getMessageContext()->getEventId(),
+                $wamd->getMessageContext()->getProjectId()
+            );
+
+            return $logEntryId; // empty($error);
+        } catch(\Exception $e) {
+            $this->emError("EXCEPTION sending messages : $e");
         }
 
-        # Record results
-        $status = $trans->status   ?? "";
-        $error = $trans->errorCode ?? "";
-        $message_sid = $trans->sid ?? "";
-        $this->emDebug("Message $status with sid $message_sid sent");
-
-        // Log the new message
-        $payload = array_merge(
-            // Message details
-            [
-                "message_sid"   => $message_sid,
-                "template"      => $wamd->getTemplate(),
-                "template_id"   => $wamd->getTemplateId(),
-                "body"          => $body,
-                "to_number"     => $to_number,
-                "from_number"   => $from_number,
-                "error"         => $error,
-                "date_sent"     => strtotime('now'),
-                "project_id"    => $this->getProjectId(),
-                "raw"           => $this->getWAH()->appendRaw($wamd->getConfig())
-            ],
-            // Merge in context
-            $wamd->getMessageContext()->getContextAsArray()
-        );
-
-        $logEntryId = $this->getWAH()->logNewMessage($payload);
-
-        $this->emDebug("Created new Log Entry as " . $logEntryId);
-
-        \REDCap::logEvent(
-            "[WhatsApp]<br>Message #" . $logEntryId . " Created",
-            "sid: $message_sid, status $status",
-            "",
-            $wamd->getMessageContext()->getRecordId(),
-            $wamd->getMessageContext()->getEventId(),
-            $wamd->getMessageContext()->getProjectId()
-        );
-
-        return $logEntryId; // empty($error);
     }
 
 

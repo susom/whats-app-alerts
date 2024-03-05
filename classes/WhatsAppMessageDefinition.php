@@ -126,11 +126,12 @@ class WhatsAppMessageDefinition
         */
 
         // Try to parse a WhatsApp message from the Email body
-        $config = self::parseHtmlishJson($email);
-        $this->module->emLog($config);
+        $config = $this->parseHtmlishJson($email);
+        $this->module->emLog('output parsed config:', $config);
         // Stop processing - this is not a valid what's app message
         if ($config === FALSE || !isset($config['type']) || $config['type'] != "whatsapp") {
             // Not What's App Message Definition
+            $this->module->emError('CONFIG error, original email:', $email);
             return false;
         } else {
             // Is What's App Message Definition
@@ -153,7 +154,7 @@ class WhatsAppMessageDefinition
      * @param $input
      * @return false|mixed
      */
-    private static function parseHtmlishJson($input) {
+    private function parseHtmlishJson($input) {
         $string = self::replaceNbsp($input, "  ");
         $junk = [
             "<p>",
@@ -162,10 +163,10 @@ class WhatsAppMessageDefinition
         ];
         // Remove HTML tags inserted by UI
         $string = str_replace($junk, '', $string);
-
+        $this->module->emLog('replacement string to be validated', $string);
         // See if it is valid json
-        list($success, $result) = self::jsonToObject($string);
-
+        list($success, $result) = $this->jsonToObject($string);
+            // false, error , true result
         if ($success) {
             return $result;
         } else {
@@ -194,7 +195,7 @@ class WhatsAppMessageDefinition
      * @param $assoc
      * @return array
      */
-    private static function jsonToObject($string, $assoc = true)
+    private function jsonToObject($string, $assoc = true)
     {
         // decode the JSON data
         $result = json_decode($string, $assoc);
@@ -237,6 +238,7 @@ class WhatsAppMessageDefinition
         }
 
         if ($error !== '') {
+            $this->module->emError('JSON errors encountered', $error);
             return array(false, $error);
         } else {
             return array(true, $result);
