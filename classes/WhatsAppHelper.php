@@ -42,6 +42,7 @@ class WhatsAppHelper
         if ($wamd->parseEmailForWhatsAppMessageDefinition($message)) {
             return $wamd;
         } else {
+            $this->module->emLog('failed to parse email for whats app message def');
             return false;
         }
     }

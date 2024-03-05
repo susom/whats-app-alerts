@@ -24,6 +24,7 @@ class WhatsAppMessageDefinition
     private $variables;
     private $template_id;
     private $template_name;
+    private WhatsAppAlerts $module;
 
     public function __construct($module) {
         // Link the parent EM so we can use helper methods
@@ -126,7 +127,7 @@ class WhatsAppMessageDefinition
 
         // Try to parse a WhatsApp message from the Email body
         $config = self::parseHtmlishJson($email);
-
+        $this->module->emLog($config);
         // Stop processing - this is not a valid what's app message
         if ($config === FALSE || !isset($config['type']) || $config['type'] != "whatsapp") {
             // Not What's App Message Definition

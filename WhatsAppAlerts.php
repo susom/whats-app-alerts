@@ -223,106 +223,107 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
 
     // An update to an existing message SID
     private function processInboundCallback($IM) {
-        $msid = $IM->getMessageSid();
-        $notes = [];
+        try {
+            $msid = $IM->getMessageSid();
+            $notes = [];
 
-        if ($entity = $this->getWAH()->getLogByMessageId($msid)) {
-            $id = $entity->getId();
-            $data = $entity->getData();
-            $status = $IM->getStatus();
-            $error = $IM->getErrorCode();
-            $icebreaker_needed = false;
+            if ($entity = $this->getWAH()->getLogByMessageId($msid)) {
+                $id = $entity->getId();
+                $data = $entity->getData();
+                $status = $IM->getStatus();
+                $error = $IM->getErrorCode();
+                $icebreaker_needed = false;
 
+                $payload = [];
+                if ($data['status'] == "undelivered" && $data['error'] == 63016 &&  // previous logged message values
+                    $status == "sent"                                               // current message update
+                ) {
+                    // You would think the order should be queued -> sent -> error/delivered -> read
+                    // but in some cases, the error message arrives before the sent message.  So, if we already have an
+                    // error and get a 'sent' status update, we are going to mostly ignore this.
+                    // TODO: Log in raw that we ignored a sent update... add look at last raw ts to see if has been very little
+                    // time to verify collision
 
-            $payload = [];
-            if ($data['status'] == "undelivered" && $data['error'] == 63016 &&  // previous logged message values
-                $status == "sent"                                               // current message update
-            ) {
-                // You would think the order should be queued -> sent -> error/delivered -> read
-                // but in some cases, the error message arrives before the sent message.  So, if we already have an
-                // error and get a 'sent' status update, we are going to mostly ignore this.
-                // TODO: Log in raw that we ignored a sent update... add look at last raw ts to see if has been very little
-                // time to verify collision
-
-                $this->emDebug("Going to ignore a sent after undelivered update");
-                $notes[] = "Ignoring a status update from " . $data['status'] . " to $status - assuming incorrect order of callback messages";
-            } else {
-                // Update status and error messages
-                $payload['status'] = $status;
-                $payload['error'] = $error;
-            }
-
-            $existing_raw = json_decode(json_encode($data['raw']), true);
-            $new_raw = $IM->getRaw();
-            $diff = $this->getWAH()->diffLastRaw($existing_raw, $new_raw);
-            $payload['raw'] = $this->getWAH()->appendRaw($diff, $existing_raw);
-            $payload['project_id'] = $_GET['pid'];
-
-            $diff_summary = [];
-            foreach ($diff as $k => $v) $diff_summary[] = "$k = '$v'";
-
-            switch ($status) {
-                case "sent":
-                    $payload['date_sent'] = strtotime('now');
-                    break;
-                case "delivered":
-                    $payload['date_delivered'] = strtotime('now');
-                    break;
-                case "read":
-                    $payload['date_read'] = strtotime('now');
-                    break;
-                case "undelivered":
-                    // Message was undelivered
-                    if ($IM->isIceBreakerError()) {
-                        $template_id = $data['template_id'];
-                        $icebreaker_template_id = $this->getProjectSetting('icebreaker-template-id', $data['project_id']);
-                        // $this->emDebug($template_id, $icebreaker_template_id);
-                        if (!empty($template_id) && $template_id == $icebreaker_template_id) {
-                            // We don't trigger an icebreaker on a failed icebreaker to prevent a loop
-                            $this->emError("Detected rejected icebreaker message #" . $id);
-                        } else {
-                            $icebreaker_needed = true;
-                        }
-                    }
-                    break;
-                case "failed":
-                    $this->emDebug("Failed Delivery", $_POST);
-                    break;
-                default:
-                    $this->emError("Unhandled callback status: $status", $_POST);
-            }
-
-            if (!empty($error)) $payload['date_error'] = strtotime('now');
-
-            // Save the update
-            if ($entity->setData($payload)) {
-                if ($result = $entity->save()) {
-                    $this->emDebug("Updated Entity #" . $id . " - $status $error");
-                    \REDCap::logEvent(
-                        "[WhatsApp]<br>Message #" . $entity->getId() . " Status Update",
-                        implode(",\n", $diff_summary),
-                        "", $data['record_id'], $data['event_id'], $data['project_id']
-                    );
-
-                    if ($icebreaker_needed) {
-                        $record_id = $data['record_id'];
-                        $to_number = $data['to_number'];
-                        $this->sendIcebreakerMessage($record_id, $to_number, $data);
-                    }
-
-                    return true;
+                    $this->emDebug("Going to ignore a sent after undelivered update");
+                    $notes[] = "Ignoring a status update from " . $data['status'] . " to $status - assuming incorrect order of callback messages";
                 } else {
-                    $this->emError("Error saving update", $payload, $_POST, $entity->getErrors());
+                    // Update status and error messages
+                    $payload['status'] = $status;
+                    $payload['error'] = $error;
                 }
-            } else {
-                $this->emDebug("Error setting payload", $payload, $entity->getErrors());
+
+                $existing_raw = json_decode(json_encode($data['raw']), true);
+                $new_raw = $IM->getRaw();
+                $diff = $this->getWAH()->diffLastRaw($existing_raw, $new_raw);
+                $payload['raw'] = $this->getWAH()->appendRaw($diff, $existing_raw);
+                $payload['project_id'] = $_GET['pid'];
+
+                $diff_summary = [];
+                foreach ($diff as $k => $v) $diff_summary[] = "$k = '$v'";
+
+                switch ($status) {
+                    case "sent":
+                        $payload['date_sent'] = strtotime('now');
+                        break;
+                    case "delivered":
+                        $payload['date_delivered'] = strtotime('now');
+                        break;
+                    case "read":
+                        $payload['date_read'] = strtotime('now');
+                        break;
+                    case "undelivered":
+                    case "failed":
+                        // Message was undelivered
+                        if ($IM->isIceBreakerError()) {
+                            $template_id = $data['template_id'];
+                            $icebreaker_template_id = $this->getProjectSetting('icebreaker-template-id', $data['project_id']);
+                            // $this->emDebug($template_id, $icebreaker_template_id);
+                            if (!empty($template_id) && $template_id == $icebreaker_template_id) {
+                                // We don't trigger an icebreaker on a failed icebreaker to prevent a loop
+                                $this->emError("Detected rejected icebreaker message #" . $id);
+                            } else {
+                                $icebreaker_needed = true;
+                            }
+                        }
+                        break;
+//                    case "failed":
+//                        $this->emDebug("Failed Delivery", $_POST);
+//                        break;
+                    default:
+                        $this->emError("Unhandled callback status: $status", $_POST);
+                }
+
+                if (!empty($error)) $payload['date_error'] = strtotime('now');
+
+                // Save the update
+                if ($entity->setData($payload)) {
+                    if ($result = $entity->save()) {
+                        $this->emDebug("Updated Entity #" . $id . " - $status $error");
+                        \REDCap::logEvent(
+                            "[WhatsApp]<br>Message #" . $entity->getId() . " Status Update",
+                            implode(",\n", $diff_summary),
+                            "", $data['record_id'], $data['event_id'], $data['project_id']
+                        );
+
+                        if ($icebreaker_needed) {
+                            $record_id = $data['record_id'];
+                            $to_number = $data['to_number'];
+                            $this->sendIcebreakerMessage($record_id, $to_number, $data);
+                        }
+
+                        return true;
+                    } else {
+                        $this->emError("Error saving update", $payload, $_POST, $entity->getErrors());
+                    }
+                } else {
+                    $this->emDebug("Error setting payload", $payload, $entity->getErrors());
+                }
             }
+            # something went wrong
+            return false;
+        } catch(\Exception $e) {
+            $this->emLog($e);
         }
-        # something went wrong
-        return false;
-
-
-
     }
 
 
@@ -623,6 +624,11 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                 );
                 $this->emDebug("Setting Icebreaker Variables Json to: " . $piped_vars);
                 $variables = json_decode($piped_vars,true);
+                if(sizeof($variables) !== 2){
+                    $this->emError('Icebreaker does not have two variables present, message will not be sent');
+                    \REDCap::logEvent("Icebreaker does not have two variables present, message will not be sent, no entry for first argument in:  $icebreaker_variables_json");
+                }
+
                 // $this->emDebug("As an array", $variables);
             } else {
                 $variables = [];

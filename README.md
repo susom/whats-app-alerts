@@ -159,3 +159,24 @@ send an ice breaker message based on an approved template.  When the participant
 we can then automatically trigger the previously rejected messages.  The ice breaker template should be in the
 format of: `HT93dc8d8d8e768c8851380e65b8635d20_en` and is typically set from the What's App configuration page.
 
+# Alert Format
+This What's app module works by intercepting the redcap_email hook and parsing json in the content body set in the alerts and notifications page.
+1. Using freeform messages
+2. Using templates
+   - Example body
+    ```json
+   {
+         "type": "whatsapp",
+         "template_id": "HT59a6bd0962fb1555dc68ddfae0352ad9_en",
+         "number": "[week_0_arm_1][screen_phone]",
+         "variables": ["Hi", "second", "third"],
+         "context": {
+           "project_id": "40",
+           "event_name": "week_2_arm_1",
+           "record_id": "1",
+           "instance": ""
+         }
+     }
+    ```
+   -
+
