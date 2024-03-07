@@ -169,12 +169,16 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
         $matches=[];
         foreach ($projects as $local_pid) {
             $pid_phone_field = $this->getProjectSetting('inbound-phone-field', $local_pid);
+            $data_table = method_exists('\REDCap', 'getDataTable') ? \REDCap::getDataTable($local_pid) : "redcap_data";
+
             $this->emDebug("Checking project $local_pid for records with $pid_phone_field that is similar to $from_number");
             $this->emDebug("local PID $local_pid phone field $pid_phone_field");
-            $sql = "SELECT record, event_id, value from redcap_data where project_id = ? and field_name = ?";
+            $data_table = method_exists('\REDCap', 'getDataTable') ? \REDCap::getDataTable($local_pid) : "redcap_data";
+            $sql = "SELECT record, event_id, value from ? where project_id = ? and field_name = ?";
+            $this->emDebug("$data_table");
             $result = $this->query(
                 $sql,
-                [$local_pid, $pid_phone_field]
+                [$data_table, $local_pid, $pid_phone_field]
             );
             while ($row = $result->fetch_assoc()) {
                 $this->emDebug("ROW val", $row);
