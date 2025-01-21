@@ -30,6 +30,34 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
 
     private $wah;
 
+
+    public function redcap_save_record ( int $project_id, string $record = NULL, string $instrument, int $event_id, int $group_id = NULL, string $survey_hash = NULL, int $response_id = NULL, int $repeat_instance = 1 ) {
+        /**
+         * Required function that executes before redcap_email
+         * This function will set the URL field in enrollment, so it can be sent via What's App alerts
+         * Alert execution (email hook) triggers before default save, thus: this workaround will ensure the field is never empty
+         */
+        $pSettings = $this->getProjectSettings();
+
+        if(empty($_POST[$pSettings['url-field']])) { // execute only the first time enrollment is saved -- survey url has not been calculated
+            $pro                    = new \Project($project_id);
+            $primary_field    = $pro->table_pk;
+            $pSettings = $this->getProjectSettings();
+
+            $url = \REDCap::getSurveyLink($record, $pSettings['survey-instrument'], $pSettings['survey-event'], '1', $project_id);
+            $saveData = [
+                [
+                    $primary_field => $record,
+                    $pSettings['url-field'] => $url,
+                ]
+            ];
+
+            $this->emLog("Saving url data for project $project_id, record $record. Url: $url");
+            // Save data using REDCap's saveData function
+            $res = \REDCap::saveData($project_id, 'json', json_encode($saveData), 'overwrite');
+        }
+    }
+
     /**
      * Generic REDCap Email Hook
      */

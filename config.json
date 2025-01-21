@@ -21,7 +21,8 @@
 	"permissions": [
 		"redcap_email",
         "redcap_module_system_enable",
-        "redcap_every_page_top"
+        "redcap_every_page_top",
+        "redcap_save_record"
 	],
 
 	"enable-every-page-hooks-on-system-pages": false,
@@ -110,7 +111,25 @@
 			"name": "<b>Enable Debug Logging</b><br><i>(optional)</i> Requires installation and configuration of emLogger",
 			"required": false,
 			"type": "checkbox"
-		}
+		},
+        {
+            "key": "survey-instrument",
+            "name": "<b>Survey Link Instrument</b><br><i>(optional)</i>Specific form that will be used to generate the survey link sent via What's App after enrollment is saved",
+            "required": false,
+            "type": "form-list"
+        },
+        {
+            "key": "survey-event",
+            "name": "<strong>Survey Link Event</strong><br><i>The event / arm the survey link should be in ",
+            "required": true,
+            "type": "event-list"
+        },
+        {
+            "key": "url-field",
+            "name": "<strong>Url Field</strong><br><i>The field the survey url (sent via what's app) for consent will be stored within",
+            "required": true,
+            "type": "field-list"
+        }
 	],
 
 

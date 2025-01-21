@@ -13,7 +13,15 @@ The following notes should help set up REDCap with What's App by Twilio
 6. Create a Message Service to handle these messages and associate it to your sender
 7. You must register approved What's App Templates.  What's App and Twilio have complex rules about what content you can sent to a What's App number.  The content depends on whether or not your are in an 'open session' or not.  An open session lasts 24 hours and begins when a participant replies to your phone number.  In most cases you will NOT have an open session with a participant and will have to use a 'template' to message them.  We suggest creaing an 'ice breaker' template that can be used to open a new open session.
 
+## Local development
+#### Getting inbound requests to work properly
+Under the PACE-DEV developer settings in the integration tab make sure to set the webhook url:
+- `[NGROK_URL]/api/?type=module&prefix=whats-app-alerts&page=pages%2Finbound&NOAUTH`
+- Ignore the delivery status callback url (this is set in overridden in EM System settings)
+- Phone number designated in EM settings determines which inbound callback to use (prod and dev will be different)
+
 TODO: Document better the next time someone goes through this process... It was long and difficult for us the first time around.
+TODO: Second time around it was still very complex
 
 
 
@@ -36,4 +44,8 @@ TODO: Document better the next time someone goes through this process... It was 
 
 ## XDebug configuration
 1. Each time refreshing ngrok urls, you must update path mappings in PHPStorm for Xdebug
-2. Add /var/www/html as the path mapping to the www folder on the server to the new entry
+2. In the upper right hand corner click edit configuations
+3. Create a new remote debug service copying the newly refreshed NGROK url as the host
+   - Ex : `c17a-99-35-20-190.ngrok-free.app`
+4. Update path mappings of www folder to /var/www/html
+
