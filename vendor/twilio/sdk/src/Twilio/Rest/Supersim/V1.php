@@ -12,28 +12,27 @@ namespace Twilio\Rest\Supersim;
 use Twilio\Domain;
 use Twilio\Exceptions\TwilioException;
 use Twilio\InstanceContext;
-use Twilio\Rest\Supersim\V1\CommandList;
 use Twilio\Rest\Supersim\V1\EsimProfileList;
 use Twilio\Rest\Supersim\V1\FleetList;
 use Twilio\Rest\Supersim\V1\IpCommandList;
 use Twilio\Rest\Supersim\V1\NetworkAccessProfileList;
 use Twilio\Rest\Supersim\V1\NetworkList;
+use Twilio\Rest\Supersim\V1\SettingsUpdateList;
 use Twilio\Rest\Supersim\V1\SimList;
 use Twilio\Rest\Supersim\V1\SmsCommandList;
 use Twilio\Rest\Supersim\V1\UsageRecordList;
 use Twilio\Version;
 
 /**
- * @property CommandList $commands
  * @property EsimProfileList $esimProfiles
  * @property FleetList $fleets
  * @property IpCommandList $ipCommands
  * @property NetworkList $networks
  * @property NetworkAccessProfileList $networkAccessProfiles
+ * @property SettingsUpdateList $settingsUpdates
  * @property SimList $sims
  * @property SmsCommandList $smsCommands
  * @property UsageRecordList $usageRecords
- * @method \Twilio\Rest\Supersim\V1\CommandContext commands(string $sid)
  * @method \Twilio\Rest\Supersim\V1\EsimProfileContext esimProfiles(string $sid)
  * @method \Twilio\Rest\Supersim\V1\FleetContext fleets(string $sid)
  * @method \Twilio\Rest\Supersim\V1\IpCommandContext ipCommands(string $sid)
@@ -43,12 +42,12 @@ use Twilio\Version;
  * @method \Twilio\Rest\Supersim\V1\SmsCommandContext smsCommands(string $sid)
  */
 class V1 extends Version {
-    protected $_commands;
     protected $_esimProfiles;
     protected $_fleets;
     protected $_ipCommands;
     protected $_networks;
     protected $_networkAccessProfiles;
+    protected $_settingsUpdates;
     protected $_sims;
     protected $_smsCommands;
     protected $_usageRecords;
@@ -61,13 +60,6 @@ class V1 extends Version {
     public function __construct(Domain $domain) {
         parent::__construct($domain);
         $this->version = 'v1';
-    }
-
-    protected function getCommands(): CommandList {
-        if (!$this->_commands) {
-            $this->_commands = new CommandList($this);
-        }
-        return $this->_commands;
     }
 
     protected function getEsimProfiles(): EsimProfileList {
@@ -103,6 +95,13 @@ class V1 extends Version {
             $this->_networkAccessProfiles = new NetworkAccessProfileList($this);
         }
         return $this->_networkAccessProfiles;
+    }
+
+    protected function getSettingsUpdates(): SettingsUpdateList {
+        if (!$this->_settingsUpdates) {
+            $this->_settingsUpdates = new SettingsUpdateList($this);
+        }
+        return $this->_settingsUpdates;
     }
 
     protected function getSims(): SimList {

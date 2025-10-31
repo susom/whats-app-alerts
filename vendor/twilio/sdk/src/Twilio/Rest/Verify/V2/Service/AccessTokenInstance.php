@@ -9,14 +9,13 @@
 
 namespace Twilio\Rest\Verify\V2\Service;
 
+use Twilio\Deserialize;
 use Twilio\Exceptions\TwilioException;
 use Twilio\InstanceResource;
 use Twilio\Values;
 use Twilio\Version;
 
 /**
- * PLEASE NOTE that this class contains beta products that are subject to change. Use them with caution.
- *
  * @property string $sid
  * @property string $accountSid
  * @property string $serviceSid
@@ -25,6 +24,8 @@ use Twilio\Version;
  * @property string $factorFriendlyName
  * @property string $token
  * @property string $url
+ * @property int $ttl
+ * @property \DateTime $dateCreated
  */
 class AccessTokenInstance extends InstanceResource {
     /**
@@ -48,6 +49,8 @@ class AccessTokenInstance extends InstanceResource {
             'factorFriendlyName' => Values::array_get($payload, 'factor_friendly_name'),
             'token' => Values::array_get($payload, 'token'),
             'url' => Values::array_get($payload, 'url'),
+            'ttl' => Values::array_get($payload, 'ttl'),
+            'dateCreated' => Deserialize::dateTime(Values::array_get($payload, 'date_created')),
         ];
 
         $this->solution = ['serviceSid' => $serviceSid, 'sid' => $sid ?: $this->properties['sid'], ];

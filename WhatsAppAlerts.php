@@ -99,14 +99,17 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
             $from_number    = $this->formatNumber($this->getFromNumber());
             $callback_url   = $this->getCallbackUrl();
             $client         = $this->getClient();
+            $data = [
+                "contentSid" => $wamd->getTemplateId(),
+                "from" => $from_number,
+                "statusCallback" => $callback_url,
+            ];
+            if(!empty($wamd->getVariables())){
+                $data["contentVariables"] = json_encode($wamd->getVariables());
+            }
 
-            $trans = $client->messages->create($to_number,
-                [
-                    "from" => $from_number,
-                    "body" => $body,
-                    "statusCallback" => $callback_url
-                ]
-            );
+
+            $trans = $client->messages->create($to_number, $data);
 
             if (!empty($trans->errors)) {
                 $this->emError("Error sending message: ",

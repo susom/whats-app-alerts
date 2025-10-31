@@ -12,25 +12,25 @@ namespace Twilio\Rest\Verify\V2\Service;
 use Twilio\Options;
 use Twilio\Values;
 
-/**
- * PLEASE NOTE that this class contains beta products that are subject to change. Use them with caution.
- */
 abstract class AccessTokenOptions {
     /**
      * @param string $factorFriendlyName The factor friendly name
+     * @param int $ttl How long, in seconds, the access token is valid.
      * @return CreateAccessTokenOptions Options builder
      */
-    public static function create(string $factorFriendlyName = Values::NONE): CreateAccessTokenOptions {
-        return new CreateAccessTokenOptions($factorFriendlyName);
+    public static function create(string $factorFriendlyName = Values::NONE, int $ttl = Values::NONE): CreateAccessTokenOptions {
+        return new CreateAccessTokenOptions($factorFriendlyName, $ttl);
     }
 }
 
 class CreateAccessTokenOptions extends Options {
     /**
      * @param string $factorFriendlyName The factor friendly name
+     * @param int $ttl How long, in seconds, the access token is valid.
      */
-    public function __construct(string $factorFriendlyName = Values::NONE) {
+    public function __construct(string $factorFriendlyName = Values::NONE, int $ttl = Values::NONE) {
         $this->options['factorFriendlyName'] = $factorFriendlyName;
+        $this->options['ttl'] = $ttl;
     }
 
     /**
@@ -41,6 +41,17 @@ class CreateAccessTokenOptions extends Options {
      */
     public function setFactorFriendlyName(string $factorFriendlyName): self {
         $this->options['factorFriendlyName'] = $factorFriendlyName;
+        return $this;
+    }
+
+    /**
+     * How long, in seconds, the access token is valid. Can be an integer between 60 and 300. Default is 60.
+     *
+     * @param int $ttl How long, in seconds, the access token is valid.
+     * @return $this Fluent Builder
+     */
+    public function setTtl(int $ttl): self {
+        $this->options['ttl'] = $ttl;
         return $this;
     }
 
