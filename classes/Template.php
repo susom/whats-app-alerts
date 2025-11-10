@@ -319,7 +319,7 @@ class Template
         $client = new Client($account_sid, $token);
         $response = $client->request(
             'GET',
-            'https://messaging.twilio.com/v1/Channels/WhatsApp/Templates'
+            'https://content.twilio.com/v1/ContentAndApprovals'
         );
 
         $templates = [];
@@ -327,15 +327,12 @@ class Template
             // Templates is an array with key 'whatsapp_templates'
             $content = $response->getContent();
 
-            foreach ($content['whatsapp_templates'] as $t) {
+            foreach ($content['contents'] as $t) {
                 $sid = $t['sid'];
-                foreach ($t['languages'] as $l) {
-                    $language = $l['language'];
-                    $key = $sid . "_" . $language;
-                    $templates[$key] = array_merge($t, $l);
-                    // Since we are pivoting on languages we can omit them from the final template
-                    unset($templates[$key]['languages']);
-                }
+                $key = $sid . "_" . $t['language'];
+                $t['content'] = $t['types'][''];  // Default to empty content
+                $templates[$sid] = array_merge($t, $t['approval_requests']);
+
             }
 
             if (!empty($content['META']['next_page_url'])) {
@@ -368,10 +365,10 @@ class Template
 
         $template            = $this->templates[$template_id];
         $this->template_id   = $template_id;
-        $this->template_name = $template['template_name'];
+        $this->template_name = $template['name'];
         $this->status        = $template['status'];
         $this->language      = $template['language'];
-        $this->content       = $template['content'];
+        $this->content       = array_pop($template['types'])['body'];  // Default to empty content
         $this->components    = $template['components'];
 
         if ($this->status != 'approved') {

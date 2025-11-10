@@ -21,7 +21,7 @@ class WhatsAppMessageDefinition
     private $to_number;        // To Number
     private $body;             // Message body
     private $MessageContext;   // Context object
-    private $variables;
+    private $variables = [];
     private $template_id;
     private $template_name;
     private WhatsAppAlerts $module;
@@ -70,7 +70,13 @@ class WhatsAppMessageDefinition
         // $this->event_name = $mc->getEventName();
         // $this->instance   = $mc->getInstance();
 
-        $this->variables = $config['variables'] ?? [];
+        if(isset($config['variables']) and !empty($config['variables'])){
+            // Adjust for 1-based array from REDCap
+            array_unshift($config['variables'], "");
+            unset($config['variables'][0]);
+            $this->variables = $config['variables'];
+        }
+
         $this->template_id = $config['template_id'] ?? null;
 
         if ($this->template_id) {
@@ -160,10 +166,13 @@ class WhatsAppMessageDefinition
             "<p>",
             "<br />",
             "<br>",
-            "</p>"
+            "</p>",
+            "<div>",
+            "</div>"
         ];
         // Remove HTML tags inserted by UI
         $string = str_replace($junk, '', $string);
+        $string = preg_replace('/\xC2\xA0/', ' ', $string);
         $this->module->emLog('replacement string to be validated', $string);
         // See if it is valid json
         list($success, $result) = $this->jsonToObject($string);
@@ -298,5 +307,8 @@ class WhatsAppMessageDefinition
         return $this->config;
     }
 
+    public function getVariables() {
+        return $this->variables;
+    }
 }
 
