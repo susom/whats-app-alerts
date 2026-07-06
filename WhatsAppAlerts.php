@@ -71,7 +71,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
             // We have a message definition object -- let's try to send it
             try {
                 $this->sendMessage($wamd);
-            } catch (Exception $e) {
+            } catch (\Throwable $e) {
                 $this->emError("Caught Exception: " . $e->getMessage());
             }
 
@@ -158,7 +158,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
             );
 
             return $logEntryId; // empty($error);
-        } catch(\Exception $e) {
+        } catch(\Throwable $e) {
             $this->emError("EXCEPTION sending messages : $e");
         }
 
