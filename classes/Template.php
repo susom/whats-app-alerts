@@ -433,16 +433,16 @@ class Template
 
         // Load any variables
         $icebreaker_variables = $this->module->getProjectSetting('icebreaker-variables');
-        $this->module->emDebug("Loaded variables for icebreaker", $icebreaker_variables);
+        $this->module->emDebug("Loaded icebreaker variables template");
 
         // Substitute variables with context
         $piped_vars = \Piping::replaceVariablesInLabel($icebreaker_variables, $record_id,
             null, 1, null, false,
             $this->module->getProjectId(), false
         );
-        $this->module->emDebug("After Piping", $piped_vars);
+        $this->module->emDebug("Icebreaker variables piped (" . strlen((string) $piped_vars) . " chars)");
         $variables = empty($icebreaker_variables) ? [] : json_decode($piped_vars,true);
-        $this->module->emDebug("As an array", $variables);
+        $this->module->emDebug("Icebreaker variables: " . count((array) $variables));
 
         // Build the actual message body and return
         return $this->getBody($variables);

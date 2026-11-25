@@ -60,10 +60,11 @@ class WhatsAppHelper
         // $payload = $this->getPayload();
         // xdebug_break();
         $entity = $factory->create('whats_app_message', $payload);
-        $this->module->emDebug("Got a new entity", substr(json_encode($entity),0,100));
+        $this->module->emDebug("Got a new entity");
         if (!$entity) {
             // There was an error creating the entity:
-            $this->module->emError("Error creating entity with payload", $payload, $factory->errors);
+            // Not $payload: it holds the numbers and message body.
+            $this->module->emError("Error creating entity: " . count((array) $factory->errors) . " error(s)");
             return false;
         } else {
             $id = $entity->getId();
@@ -172,14 +173,14 @@ class WhatsAppHelper
                 $base_raw_entry = end($old_raw);
             }
 
-            $this->module->emDebug("Base Raw entry for comparison: " . json_encode($base_raw_entry));
+            $this->module->emDebug("Base Raw entry for comparison has keys: " . implode(",", array_keys((array) $base_raw_entry)));
             $diff = [];
             foreach ($new_raw as $k => $v) {
                 if (!isset($base_raw_entry[$k]) || $base_raw_entry[$k] !== $v) {
                     $diff[$k] = $v;
                 }
             }
-            $this->module->emDebug("Diff: " . json_encode($diff));
+            $this->module->emDebug("Diff keys: " . implode(",", array_keys($diff)));
             return $diff;
         }
     }

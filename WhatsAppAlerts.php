@@ -63,7 +63,8 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
      */
     public function redcap_email( $to, $from, $subject, $message, $cc, $bcc, $fromName, $attachments ) {
         // Determine if this outbound email is intended to create a WhatsApp Message
-        $this->emLog("Alert triggered", $message);
+        // Not $message: it is the body of every email REDCap sends from this project.
+        $this->emDebug("Alert triggered: checking whether the email (" . strlen((string) $message) . " chars) is a WhatsApp definition");
         if (!$wamd = $this->getWAH()->parseEmailForWhatsAppMessageDefinition($message)) {
             // Just send email if not a what's app message
             return true;
@@ -92,7 +93,8 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
      */
     public function sendMessage($wamd) {
         try {
-            $this->emLog($wamd);
+            // Not $wamd: it holds the recipient number and message body.
+            $this->emDebug("Sending WhatsApp message (template " . ($wamd->getTemplateId() ?: "none") . ")");
             $to_number  = $this->formatNumber($wamd->getToNumber());
             $body       = $wamd->getBody();
 
@@ -112,11 +114,8 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
             $trans = $client->messages->create($to_number, $data);
 
             if (!empty($trans->errors)) {
-                $this->emError("Error sending message: ",
-                    $trans->errors,
-                    $trans->errorCode,
-                    $trans->errorMessage
-                );
+                // Not errorMessage / errors: Twilio's error text can include the recipient number.
+                $this->emError("Error sending message: Twilio error code " . $trans->errorCode);
             }
 
             # Record results
@@ -159,7 +158,9 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
 
             return $logEntryId; // empty($error);
         } catch(\Throwable $e) {
-            $this->emError("EXCEPTION sending messages : $e");
+            // Not the message: Twilio copies its API error text into it, and invalid-recipient errors include the number.
+            $this->emError("EXCEPTION sending messages : " . get_class($e) . " code " . $e->getCode()
+                . " at " . basename($e->getFile()) . ":" . $e->getLine());
         }
 
     }
@@ -202,7 +203,8 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
             $pid_phone_field = $this->getProjectSetting('inbound-phone-field', $local_pid);
             $data_table = method_exists('\REDCap', 'getDataTable') ? \REDCap::getDataTable($local_pid) : "redcap_data";
 
-            $this->emDebug("Checking project $local_pid for records with $pid_phone_field that is similar to $from_number");
+            // Never log $from_number or the phone values read below.
+            $this->emDebug("Checking project $local_pid for records with $pid_phone_field that match the sender");
             $this->emDebug("local PID $local_pid phone field $pid_phone_field");
             $data_table = method_exists('\REDCap', 'getDataTable') ? \REDCap::getDataTable($local_pid) : "redcap_data";
             $this->emDebug("$data_table");
@@ -211,10 +213,9 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                 [$local_pid, $pid_phone_field]
             );
             while ($row = $result->fetch_assoc()) {
-                $this->emDebug("ROW val", $row);
                 $record_phone_digits = $this->formatNumber($row['value'], '');
                 if (!empty($record_phone_digits) && $from_digits == $record_phone_digits) {
-                    $this->emDebug("Found an inbound match: " . json_encode($row));
+                    $this->emDebug("Found an inbound match: record " . $row['record'] . ", event " . $row['event_id']);
                     // We have a match
                     $matches[] = [
                         "project_id" => $local_pid,
@@ -242,7 +243,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                 // Use a lock to keep things under control w/ races and a lot of inbound messages
                 $lock = $this->query("SELECT GET_LOCK(?,30)", $this->PREFIX)->fetch_array()[0];
                 if ($lock == 0) {
-                    $this->emError("Unable to obtain a lock for inbound message", $IM);
+                    $this->emError("Unable to obtain a lock for inbound message " . $IM->getMessageSid());
                     exit("Unable to obtain lock for inbound message -- see logs");
                 }
 
@@ -331,7 +332,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
 //                        $this->emDebug("Failed Delivery", $_POST);
 //                        break;
                     default:
-                        $this->emError("Unhandled callback status: $status", $_POST);
+                        $this->emError("Unhandled callback status: $status for message #$id");
                 }
 
                 if (!empty($error)) $payload['date_error'] = strtotime('now');
@@ -354,16 +355,17 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
 
                         return true;
                     } else {
-                        $this->emError("Error saving update", $payload, $_POST, $entity->getErrors());
+                        // Not $payload or $_POST: they carry the numbers and message status details.
+                        $this->emError("Error saving update for message #$id: " . count((array) $entity->getErrors()) . " error(s)");
                     }
                 } else {
-                    $this->emDebug("Error setting payload", $payload, $entity->getErrors());
+                    $this->emDebug("Error setting payload for message #$id: " . count((array) $entity->getErrors()) . " error(s)");
                 }
             }
             # something went wrong
             return false;
         } catch(\Exception $e) {
-            $this->emLog($e);
+            $this->emError("Exception processing callback: " . $e->getMessage() . " at " . basename($e->getFile()) . ":" . $e->getLine());
         }
     }
 
@@ -397,7 +399,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
         ];
 
         if (empty($matches)) {
-            $this->emLog("Unable to identify a matching record for the reply from $from_number in projects " . implode(",", $possible_projects));
+            $this->emLog("Unable to identify a matching record for an inbound reply in projects " . implode(",", $possible_projects));
             // TODO: We should still probably log the message to the table even if it isn't associated with a project or record
             $logEntryId = $this->getWAH()->logNewMessage($payload);
             foreach ($possible_projects as $project_id) {
@@ -409,10 +411,10 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
             }
             return false;
         } else if(count($matches) > 1) { // multiple projects exist with the same
-            $this->emLog("Found multiple potential records that match the inbound message from $from_number", $matches);
+            $this->emLog("Found multiple potential records that match the inbound message", $matches);
         } else {
             // Found just one match
-            $this->emDebug("Matched reply from $from_number to " . json_encode($matches));
+            $this->emDebug("Matched reply to " . json_encode($matches));
         }
 
         $payload['raw']['matches'] = $matches;
@@ -426,7 +428,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
             ]);
             $this->settings_loaded=false;
 
-            $this->emDebug("About to process ", $this_payload);
+            $this->emDebug("About to process inbound reply for record $record_id in project $project_id");
 
             try {
 
@@ -454,11 +456,12 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                     $_GET['pid'] = $prev_pid;
                 } else {
                     // Error occurred
-                    $this->emError("Unable to save new IM", $this_payload);
+                    $this->emError("Unable to save new IM for record $record_id in project $project_id");
                 }
 
             } catch (\Exception $e) {
-                $this->emError("Caught Exception:" . $e->getMessage(), $e->getTraceAsString());
+                // No stack trace: its frames carry the sender number and message.
+                $this->emError("Caught Exception:" . $e->getMessage() . " at " . basename($e->getFile()) . ":" . $e->getLine());
             }
 
 
@@ -663,7 +666,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                     null, 1, null, false,
                     $this->getProjectId(), false
                 );
-                $this->emDebug("Setting Icebreaker Variables Json to: " . $piped_vars);
+                $this->emDebug("Icebreaker variables piped (" . strlen((string) $piped_vars) . " chars)");
                 $variables = json_decode($piped_vars,true);
                 if(sizeof($variables) !== 2){
                     $this->emError('Icebreaker does not have two variables present, message will not be sent');
@@ -694,7 +697,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                 // "REDCap Message" => "Triggered by failed message " . $message_id
             ];
 
-            $this->emDebug("Config",$message_config);
+            $this->emDebug("Icebreaker config for record $record_id, template $icebreaker_template");
 
             $wamd = new WhatsAppMessageDefinition($this);
             $wamd->parseDefinition($message_config);
@@ -772,7 +775,7 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                 "REDCap Message" => "This is a redelivery of message #$id - " . $data['message_sid']
             ];
 
-            $this->emDebug("Redelivery Config",$config);
+            $this->emDebug("Redelivery config for message #$id");
             $wamd = $this->getWAH()->getMessageDefinitionFromConfig($config);
 
             // New message that will be used for redelivery
@@ -795,14 +798,14 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
                 );
                 $update['raw'] = $raw;
 
-                $this->emDebug("About to set data to ", $update);
+                $this->emDebug("About to set data for message #$id: " . implode(",", array_keys($update)));
                 if (!$entity->setData($update)) {
-                    $this->emError("An error occurred setting the data:", $update);
+                    $this->emError("An error occurred setting the redelivery data for message #$id");
                 };
 
                 $id = $entity->save();
                 if ($id === false) {
-                    $this->emError("An error occurred saving the data:", $update);
+                    $this->emError("An error occurred saving the redelivery data for message #$id");
                 } else {
                     $this->emDebug("Message #$id - resent as #$new_id");
                 }
