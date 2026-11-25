@@ -16,6 +16,12 @@ Each line now logs message ids, record / project ids, counts and keys instead of
 
 Behavior is unchanged, with one exception: a non-WhatsApp email is now logged as a DEBUG note instead of an ERROR. It is the normal case, not an error.
 
+Code review then found three more spots, also fixed:
+
+- **Twilio exception text.** The Twilio SDK copies the API's error text into exceptions, and failed sends expose it in `errorMessage`. Invalid-recipient errors include the number, so both paths now log the exception class or error code only.
+- **The email's `type` field.** Its value is free text from the email body, so it is now logged as a fixed classification (`whatsapp` / `other` / `not json`).
+- **`JSON errors encountered` in `jsonToObject()`.** This line fired at ERROR for every ordinary email and is now DEBUG. A plain email produces 0 ERROR lines.
+
 The commented-out `processInboundMessageOld()` block was left untouched.
 
 ## How it was reproduced and verified (local, REDCap 17.5.9, PID 213)

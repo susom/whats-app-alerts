@@ -133,7 +133,8 @@ class WhatsAppMessageDefinition
 
         // Try to parse a WhatsApp message from the Email body
         $config = $this->parseHtmlishJson($email);
-        $this->module->emDebug('Parsed email config type: ' . (is_array($config) ? ($config['type'] ?? 'none') : 'not json'));
+        // A fixed classification: 'type' is free text from the email body.
+        $this->module->emDebug('Parsed email config: ' . (!is_array($config) ? 'not json' : (($config['type'] ?? null) === 'whatsapp' ? 'whatsapp' : 'other')));
         // Stop processing - this is not a valid what's app message
         if ($config === FALSE || !isset($config['type']) || $config['type'] != "whatsapp") {
             // Not What's App Message Definition
@@ -248,7 +249,8 @@ class WhatsAppMessageDefinition
         }
 
         if ($error !== '') {
-            $this->module->emError('JSON errors encountered', $error);
+            // Routine for every ordinary (non-JSON) email, so not an error.
+            $this->module->emDebug('JSON errors encountered', $error);
             return array(false, $error);
         } else {
             return array(true, $result);

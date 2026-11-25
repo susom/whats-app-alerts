@@ -114,11 +114,8 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
             $trans = $client->messages->create($to_number, $data);
 
             if (!empty($trans->errors)) {
-                $this->emError("Error sending message: ",
-                    $trans->errors,
-                    $trans->errorCode,
-                    $trans->errorMessage
-                );
+                // Not errorMessage / errors: Twilio's error text can include the recipient number.
+                $this->emError("Error sending message: Twilio error code " . $trans->errorCode);
             }
 
             # Record results
@@ -161,7 +158,9 @@ class WhatsAppAlerts extends \ExternalModules\AbstractExternalModule {
 
             return $logEntryId; // empty($error);
         } catch(\Throwable $e) {
-            $this->emError("EXCEPTION sending messages : " . $e->getMessage() . " at " . basename($e->getFile()) . ":" . $e->getLine());
+            // Not the message: Twilio copies its API error text into it, and invalid-recipient errors include the number.
+            $this->emError("EXCEPTION sending messages : " . get_class($e) . " code " . $e->getCode()
+                . " at " . basename($e->getFile()) . ":" . $e->getLine());
         }
 
     }
